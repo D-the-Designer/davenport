@@ -1,0 +1,94 @@
+{
+  "name": "dockyard",
+  "version": "0.1.0",
+  "description": "Universal floating asset dock for designers, artists, editors, and production teams.",
+  "author": "Dockyard Contributors",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "homepage": "https://github.com/YOUR_USERNAME/dockyard",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:dev": "concurrently -n VITE,ELECTRON -c cyan,green \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron:build:mac": "vite build && electron-builder --mac",
+    "electron:build:win": "vite build && electron-builder --win",
+    "electron:build:linux": "vite build && electron-builder --linux",
+    "electron:build:all": "vite build && electron-builder --mac --win --linux",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "better-sqlite3": "^9.4.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.1.4",
+    "electron": "^29.1.4",
+    "electron-builder": "^24.13.3",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0",
+    "cross-env": "^7.0.3"
+  },
+  "build": {
+    "appId": "com.dockyard.app",
+    "productName": "Dockyard",
+    "copyright": "Copyright © 2024 Dockyard Contributors",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "public"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "extraFiles": [],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "public/icon.icns",
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "public/entitlements.mac.plist",
+      "entitlementsInherit": "public/entitlements.mac.plist"
+    },
+    "win": {
+      "icon": "public/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "linux": {
+      "icon": "public/icon.png",
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] }
+      ],
+      "category": "Graphics"
+    },
+    "dmg": {
+      "title": "Dockyard ${version}",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
+    }
+  }
+}
