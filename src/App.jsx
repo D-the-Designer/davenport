@@ -37,7 +37,7 @@ const api = window.dockyard || {
   importFilesDialog:()=>Promise.resolve([]), importDroppedFiles:()=>Promise.resolve([]),
   startDrag:()=>{}, openFile:()=>Promise.resolve(),
   getDataDir:()=>Promise.resolve('~/Dockyard'), toggleAlwaysOnTop:()=>Promise.resolve(false),
-  exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null),
+  exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null), regenerateThumbnails:()=>Promise.resolve({count:0}),
 };
 
 const DEFAULT_CONTAINERS = [
@@ -164,7 +164,7 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
 };
 
 // ── TOOLBAR ────────────────────────────────────────────────────────────────
-const Toolbar = ({path,onBack,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode,thumbSize,setThumbSize,search,setSearch,onImport}) => (
+const Toolbar = ({path,onBack,onAddFolder,onManifest,onNotes,onRegenThumbs,count,viewMode,setViewMode,thumbSize,setThumbSize,search,setSearch,onImport}) => (
   <div style={{height:36,background:C.bgSurface,borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:8,padding:"0 10px",flexShrink:0,fontFamily:"monospace"}}>
     <button onClick={onBack} style={tbtn()} title="Back">←</button>
     <div style={{width:1,height:16,background:C.border}}/>
@@ -174,6 +174,7 @@ const Toolbar = ({path,onBack,onAddFolder,onManifest,onNotes,count,viewMode,setV
     <div style={{width:1,height:16,background:C.border}}/>
     <button onClick={onManifest} style={tbtn()} title="Manifest view">MANIFEST</button>
     <button onClick={onNotes} style={tbtn()} title="Notes">NOTES</button>
+    <button onClick={onRegenThumbs} style={tbtn()} title="Regenerate thumbnails">⟳ THUMBS</button>
     <div style={{width:1,height:16,background:C.border}}/>
     <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="SEARCH_"
       style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,padding:"2px 6px",width:100,outline:"none",fontFamily:"monospace",letterSpacing:1}}/>
@@ -841,6 +842,17 @@ export default function App() {
     if (cs){setContainers(prev=>[...prev.filter(c=>c.project_id!==activeProjectId),...cs]);notify("PACKAGE IMPORTED");}
   };
 
+  const handleRegenThumbs = async () => {
+    notify("REGENERATING THUMBNAILS...");
+    const result = await api.regenerateThumbnails({ containerId: activeContainerId });
+    // Reload assets to get updated thumb paths
+    if (activeContainerId) {
+      const assets = await api.getAssets(activeContainerId);
+      setAssetMap(m=>({...m,[activeContainerId]:assets}));
+    }
+    notify(`REGENERATED ${result?.count||0} THUMBNAILS`);
+  };
+
   const handleExport=async()=>{
     if (!activeContainer) return;
     const ok=await api.exportContainer({container:activeContainer,assets:rawAssets,project:activeProject});
@@ -911,6 +923,7 @@ export default function App() {
                 onAddFolder={()=>openAddFolder(activeProjectId,activeContainerId)}
                 onManifest={()=>setViewMode(v=>v==="manifest"?"grid":"manifest")}
                 onNotes={()=>setModal("notes")}
+                onRegenThumbs={handleRegenThumbs}
                 count={filteredAssets.length}
                 viewMode={viewMode} setViewMode={setViewMode}
                 thumbSize={thumbSize} setThumbSize={setThumbSize}
