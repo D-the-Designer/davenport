@@ -186,11 +186,20 @@ ipcMain.on('start-drag', (event, { filePath, thumbPath }) => {
       console.warn('[DRAG] File not found:', filePath);
       return;
     }
-    // Use thumb if available, otherwise use the file itself as icon
-    // For non-image files, Electron will use a default icon
-    let icon = filePath;
-    if (thumbPath && fs.existsSync(thumbPath)) {
-      icon = thumbPath;
+    const { nativeImage } = require('electron');
+    let icon;
+    try {
+      const iconPath = (thumbPath && fs.existsSync(thumbPath)) ? thumbPath : filePath;
+      icon = nativeImage.createFromPath(iconPath);
+      if (icon.isEmpty()) {
+        icon = nativeImage.createFromPath(filePath);
+      }
+      if (icon.isEmpty()) {
+        // Create a small placeholder icon
+        icon = nativeImage.createEmpty();
+      }
+    } catch(e) {
+      icon = nativeImage.createEmpty();
     }
     console.log('[DRAG] Starting drag for:', filePath);
     event.sender.startDragging({ file: filePath, icon });
