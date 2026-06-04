@@ -702,6 +702,53 @@ const NotesModal=({container,onClose,onSave})=>{
 
 const Notif=({msg})=>msg?<div style={{position:"fixed",top:44,right:12,background:C.bgSurface,border:`1px solid ${C.green}`,padding:"6px 12px",fontSize:9,color:C.green,fontFamily:"monospace",letterSpacing:1,zIndex:300}}>{msg}</div>:null;
 
+// ── CONNECTOR WIDGET ──────────────────────────────────────────────────────
+const ConnectorWidget = ({snapState, onSnap, onUndock}) => {
+  if (!snapState) return null;
+
+  const isDocked = snapState.phase === 'docked';
+  const isApproach = snapState.phase === 'approach';
+
+  const edgeStyle = {
+    right:  {position:"fixed",right:0,top:"50%",transform:"translateY(-50%)"},
+    left:   {position:"fixed",left:0,top:"50%",transform:"translateY(-50%)"},
+    top:    {position:"fixed",top:0,left:"50%",transform:"translateX(-50%)"},
+    bottom: {position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)"},
+  }[snapState.edge] || {position:"fixed",right:0,top:"50%",transform:"translateY(-50%)"};
+
+  return (
+    <div style={{...edgeStyle, zIndex:400, fontFamily:"monospace"}}>
+      {isDocked ? (
+        <div
+          onClick={onUndock}
+          style={{
+            background:C.bgActive, border:`1px solid ${C.green}`,
+            color:C.green, fontSize:9, padding:"6px 10px", cursor:"pointer",
+            letterSpacing:1, textAlign:"center", lineHeight:1.8,
+            boxShadow:`0 0 8px ${C.green}44`,
+          }}
+          title="Click to undock">
+          DOCKED TO<br/>{snapState.appName?.toUpperCase()?.slice(0,14)}<br/>
+          <span style={{color:C.greenDim,fontSize:8}}>CLICK TO RELEASE</span>
+        </div>
+      ) : (
+        <div
+          onClick={onSnap}
+          style={{
+            background:"rgba(8,12,9,0.92)", border:`1px dashed ${C.green}`,
+            color:C.green, fontSize:9, padding:"6px 10px", cursor:"pointer",
+            letterSpacing:1, textAlign:"center", lineHeight:1.8, opacity:0.85,
+            animation:"pulse 1s infinite",
+          }}
+          title="Click to snap">
+          DOCK HERE?<br/>
+          <span style={{color:C.greenDim,fontSize:8}}>{snapState.appName?.toUpperCase()?.slice(0,14)}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── ROOT ───────────────────────────────────────────────────────────────────
 export default function App() {
   const [projects,setProjects]       = useState([]);
@@ -722,6 +769,49 @@ export default function App() {
   const [newFolderMeta,setNewFolderMeta] = useState({projectId:null,parentId:null,parentName:null});
 
   const notify=(msg,ms=3000)=>{setNotification(msg);setTimeout(()=>setNotification(null),ms);};
+
+  // ── SNAP TO DOCK ────────────────────────────────────────────────────────
+  // Poll for snap opportunity while window is being moved
+  useEffect(()=>{
+    const api2 = window.dockyard;
+    if (!api2?.checkSnap) return;
+
+    // Check snap state periodically
+    const interval = setInterval(async()=>{
+      const result = await api2.checkSnap();
+      if (result) {
+        setSnapState(s => {
+          // Already docked to this app+edge — don't re-trigger
+          if (s?.phase==='docked' && s?.appName===result.appName && s?.edge===result.edge) return s;
+          return { edge: result.edge, appName: result.appName, phase: 'approach', snapData: result };
+        });
+      } else {
+        setSnapState(s => {
+          if (s?.phase==='docked') return s; // Stay docked
+          return null;
+        });
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSnap = async() => {
+    if (!snapState?.snapData) return;
+    const result = await window.dockyard.doSnap(snapState.snapData);
+    if (result?.success) {
+      setSnapState({ edge: snapState.edge, appName: result.appName, phase: 'docked' });
+      setNarrow(true);
+      notify(`DOCKED TO ${result.appName.toUpperCase()}`);
+    }
+  };
+
+  const handleUndock = async() => {
+    await window.dockyard?.doUndock?.();
+    setSnapState(null);
+    setNarrow(false);
+    notify("UNDOCKED");
+  };
 
   const handleSetNarrow = async (val) => {
     if (val) {
@@ -984,6 +1074,7 @@ export default function App() {
         onStateChange={handleStateChange}
       />
       <Notif msg={notification}/>
+      <ConnectorWidget snapState={snapState} onSnap={handleSnap} onUndock={handleUndock}/>
     </div>
   );
 
@@ -1066,6 +1157,7 @@ export default function App() {
       {modal==="new-folder"&&<NewFolderModal onClose={()=>setModal(null)} onCreate={handleCreateFolder} parentName={newFolderMeta.parentName}/>}
       {modal==="notes"&&<NotesModal container={activeContainer} onClose={()=>setModal(null)} onSave={handleSaveNotes}/>}
       <Notif msg={notification}/>
+      <ConnectorWidget snapState={snapState} onSnap={handleSnap} onUndock={handleUndock}/>
     </div>
   );
 }
