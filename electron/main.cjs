@@ -57,13 +57,31 @@ const nextSeq        = (cid) => { const r=g1('SELECT MAX(sequence_num) as m FROM
 const safeName       = (s)   => s.replace(/[^a-zA-Z0-9\-_]/g,'-').replace(/-+/g,'-').slice(0,40);
 
 async function generateThumb(src, dest, type) {
+  if (!['image','vector'].includes(type)) return false;
   try {
     const sharp = require('sharp');
-    if (['image','vector'].includes(type)) {
-      await sharp(src).resize(200,200,{fit:'cover'}).png().toFile(dest);
-      return true;
+    await sharp(src)
+      .resize(200, 200, { fit: 'cover', position: 'centre' })
+      .png()
+      .toFile(dest);
+    console.log('[THUMB] Generated:', dest);
+    return true;
+  } catch(e) {
+    console.warn('[THUMB] Sharp failed, trying nativeImage fallback:', e.message);
+    try {
+      const { nativeImage } = require('electron');
+      const img = nativeImage.createFromPath(src);
+      if (!img.isEmpty()) {
+        const resized = img.resize({ width: 200, height: 200 });
+        const pngData = resized.toPNG();
+        fs.writeFileSync(dest, pngData);
+        console.log('[THUMB] nativeImage fallback success:', dest);
+        return true;
+      }
+    } catch(e2) {
+      console.warn('[THUMB] nativeImage fallback failed:', e2.message);
     }
-  } catch(e) {}
+  }
   return false;
 }
 
@@ -130,6 +148,16 @@ function createWindow() {
   if (isDev) { mainWindow.loadURL('http://localhost:5173'); }
   else { mainWindow.loadFile(path.join(__dirname, '../dist/index.html')); }
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  // Allow loading local file:// images for thumbnails
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ["default-src 'self' 'unsafe-inline' 'unsafe-eval' file: data: blob:"]
+      }
+    });
+  });
 }
 
 app.whenReady().then(createWindow);
@@ -209,6 +237,25 @@ ipcMain.on('start-drag', (event, { filePath, thumbPath }) => {
 });
 
 ipcMain.handle('open-file', (_, fp) => { if (fp && fs.existsSync(fp)) shell.openPath(fp); });
+
+// Regenerate thumbnails for assets that don't have them
+ipcMain.handle('regen-thumbnails', async (_, { containerId }) => {
+  const assets = getAssets(containerId);
+  let count = 0;
+  for (const asset of assets) {
+    if (!asset.file_path || !fs.existsSync(asset.file_path)) continue;
+    if (!['image','vector'].includes(asset.type)) continue;
+    const thumbName = `${asset.id}_thumb.png`;
+    const thumbPath = path.join(THUMBS_DIR, thumbName);
+    const ok = await generateThumb(asset.file_path, thumbPath, asset.type);
+    if (ok) {
+      run("UPDATE assets SET thumb_path=?, updated_at=datetime('now') WHERE id=?", thumbPath, asset.id);
+      count++;
+    }
+  }
+  console.log(`[THUMB] Regenerated ${count} thumbnails for container ${containerId}`);
+  return count;
+});
 ipcMain.handle('get-data-dir', () => DOCKYARD_DIR);
 ipcMain.handle('toggle-always-on-top', () => { alwaysOnTop=!alwaysOnTop; mainWindow.setAlwaysOnTop(alwaysOnTop,'floating'); return alwaysOnTop; });
 
