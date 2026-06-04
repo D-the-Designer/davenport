@@ -125,46 +125,58 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
       {label:"Grid", action:"view-grid"},
       {label:"List", action:"view-list"},
       {label:"Manifest", action:"view-manifest"},
-      {sep:true},
-      {label:narrow?"Full Mode":"Narrow Mode", action:"narrow"},
     ],
   };
   return (
-    <div style={{height:26,background:"#050905",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",padding:"0 8px 0 80px",gap:0,flexShrink:0,fontFamily:"monospace",WebkitAppRegion:"drag",position:"relative",zIndex:50}}>
-      <span style={{color:C.green,fontSize:10,fontWeight:700,letterSpacing:2,marginRight:12,WebkitAppRegion:"no-drag"}}>DOCKYARD</span>
-      {Object.keys(menus).map(m=>(
-        <div key={m} style={{position:"relative",WebkitAppRegion:"no-drag"}}>
-          <button onClick={()=>setActiveMenu(activeMenu===m?null:m)}
-            style={{background:activeMenu===m?C.bgActive:"transparent",border:"none",color:activeMenu===m?C.green:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"3px 8px",cursor:"pointer",letterSpacing:1}}>
-            {m}
-          </button>
-          {activeMenu===m&&(
-            <div style={{position:"absolute",top:"100%",left:0,background:C.bgSurface,border:`1px solid ${C.borderMed}`,minWidth:180,zIndex:200}}>
-              {menus[m].map((item,i)=>item.sep
-                ? <div key={i} style={{height:1,background:C.border,margin:"2px 0"}}/>
-                : <button key={i} onClick={()=>{
-                    setActiveMenu(null);
-                    if(item.action==="import") onImport();
-                    else if(item.action==="open-pkg") onImportPkg();
-                    else if(item.action==="pin") onToggleTop();
-                    else if(item.action==="narrow") setNarrow(n=>!n);
-                  }}
-                  style={{display:"block",width:"100%",background:"transparent",border:"none",color:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"6px 12px",cursor:"pointer",textAlign:"left",letterSpacing:1}}
-                  onMouseEnter={e=>{e.currentTarget.style.background=C.bgHover;e.currentTarget.style.color=C.green;}}
-                  onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.greenDim;}}
-                >{item.label}</button>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-      <div style={{flex:1}}/>
-      <button onClick={onToggleTop}
-        style={{background:alwaysOnTop?C.bgActive:"transparent",border:`1px solid ${alwaysOnTop?C.green:C.borderMed}`,color:alwaysOnTop?C.green:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"2px 8px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",marginRight:8}}
-        title={alwaysOnTop?"Unpin — stop floating over other windows":"Pin — keep Dockyard on top of all windows"}>
-        {alwaysOnTop?"📌 PINNED":"PIN"}
-      </button>
-      <span style={{fontSize:8,color:C.greenMuted,letterSpacing:1,WebkitAppRegion:"no-drag"}}>LOCAL ONLY</span>
+    <div style={{flexShrink:0,fontFamily:"monospace",WebkitAppRegion:"drag",position:"relative",zIndex:50}}>
+      {/* Top strip — window controls */}
+      <div style={{height:36,background:"#040904",borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",padding:"0 8px 0 80px",gap:6}}>
+        <span style={{color:C.green,fontSize:11,fontWeight:700,letterSpacing:3,marginRight:8,WebkitAppRegion:"no-drag"}}>DOCKYARD</span>
+        <div style={{width:1,height:14,background:C.borderMed}}/>
+        {/* Pin button — prominent */}
+        <button onClick={onToggleTop}
+          title={alwaysOnTop?"Unpin — allow other windows on top":"Pin — keep Dockyard above all windows"}
+          style={{background:alwaysOnTop?C.bgActive:"transparent",border:`1px solid ${alwaysOnTop?C.green:C.borderMed}`,color:alwaysOnTop?C.green:C.greenDim,fontSize:10,fontFamily:"monospace",padding:"3px 10px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:5}}>
+          <span>{alwaysOnTop?"📌":"⬜"}</span>
+          <span>{alwaysOnTop?"PINNED":"PIN"}</span>
+        </button>
+        {/* Narrow/Full toggle — prominent */}
+        <button onClick={()=>setNarrow(n=>!n)}
+          title={narrow?"Switch to full mode":"Switch to narrow strip mode"}
+          style={{background:narrow?C.bgActive:"transparent",border:`1px solid ${narrow?C.green:C.borderMed}`,color:narrow?C.green:C.greenDim,fontSize:10,fontFamily:"monospace",padding:"3px 10px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:5}}>
+          <span>{narrow?"◀▶":"▶◀"}</span>
+          <span>{narrow?"FULL":"NARROW"}</span>
+        </button>
+        <div style={{flex:1}}/>
+        <span style={{fontSize:8,color:C.greenMuted,letterSpacing:1,WebkitAppRegion:"no-drag"}}>LOCAL ONLY</span>
+      </div>
+      {/* Menu strip */}
+      <div style={{height:22,background:"#050905",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",padding:"0 8px 0 80px",gap:0}}>
+        {Object.keys(menus).map(m=>(
+          <div key={m} style={{position:"relative",WebkitAppRegion:"no-drag"}}>
+            <button onClick={()=>setActiveMenu(activeMenu===m?null:m)}
+              style={{background:activeMenu===m?C.bgActive:"transparent",border:"none",color:activeMenu===m?C.green:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"2px 8px",cursor:"pointer",letterSpacing:1}}>
+              {m}
+            </button>
+            {activeMenu===m&&(
+              <div style={{position:"absolute",top:"100%",left:0,background:C.bgSurface,border:`1px solid ${C.borderMed}`,minWidth:180,zIndex:200}}>
+                {menus[m].map((item,i)=>item.sep
+                  ? <div key={i} style={{height:1,background:C.border,margin:"2px 0"}}/>
+                  : <button key={i} onClick={()=>{
+                      setActiveMenu(null);
+                      if(item.action==="import") onImport();
+                      else if(item.action==="open-pkg") onImportPkg();
+                    }}
+                    style={{display:"block",width:"100%",background:"transparent",border:"none",color:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"6px 12px",cursor:"pointer",textAlign:"left",letterSpacing:1}}
+                    onMouseEnter={e=>{e.currentTarget.style.background=C.bgHover;e.currentTarget.style.color=C.green;}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.greenDim;}}
+                  >{item.label}</button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -589,10 +601,13 @@ const NarrowStrip = ({assets,containerName,onExpand,onStartDrag,onDropFiles,onSt
       style={{width:"100%",height:"100%",background:C.bgBase,border:`1px solid ${C.borderMed}`,display:"flex",flexDirection:"column",fontFamily:"monospace",overflow:"hidden",flex:1}}>
 
       {/* Header */}
-      <div style={{padding:"6px 8px",borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:4}}>
-        <button onClick={onExpand} style={{background:"transparent",border:"none",color:C.greenDim,fontSize:10,cursor:"pointer",padding:0}} title="Expand">»</button>
+      <div style={{padding:"6px 8px",borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:4,background:"#040904"}}>
         <span style={{fontSize:8,color:C.green,letterSpacing:1,flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{containerName?.toUpperCase()||"DOCKYARD"}</span>
       </div>
+      <button onClick={onExpand}
+        style={{width:"100%",background:C.bgActive,border:"none",borderBottom:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"5px 0",cursor:"pointer",letterSpacing:2,textAlign:"center"}}>
+        ◀▶ FULL MODE
+      </button>
 
       {/* Connector badge */}
       <div style={{margin:"4px 8px",padding:"4px 6px",background:C.bgActive,border:`1px solid ${C.borderBright}`,fontSize:8,color:C.green,letterSpacing:1,textAlign:"center"}}>
