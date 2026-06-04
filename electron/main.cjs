@@ -148,7 +148,12 @@ function createWindow() {
     backgroundColor: '#080C09',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 12, y: 12 },
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: false,  // Allow file:// access for local thumbnails
+    },
     show: false,
   });
   if (isDev) { mainWindow.loadURL('http://localhost:5173'); }
