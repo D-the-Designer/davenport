@@ -1008,10 +1008,12 @@ export default function App() {
                 </div>
               ) : (
                 <AssetGrid
-                  assets={filteredAssets} selected={selectedAssetId}
-                  setSelected={setSelectedAssetId} thumbSize={thumbSize}
-                  viewMode={viewMode} onDropFiles={handleDroppedFiles}
-                  onStartDrag={handleStartDrag} onStateChange={handleStateChange}
+                  assets={filteredAssets}
+                  selectedId={selectedAssetId} onSelect={setSelectedAssetId}
+                  multiSelected={multiSelected} setMultiSelected={setMultiSelected}
+                  thumbSize={thumbSize} viewMode={viewMode}
+                  onDropFiles={handleDroppedFiles} onStartDrag={handleStartDrag}
+                  onStateChange={handleStateChange}
                 />
               )}
             </>
