@@ -59,20 +59,6 @@ const Waveform = ({ color=C.amber, h=20 }) => {
 };
 
 // ── ASSET THUMBNAIL ────────────────────────────────────────────────────────
-const ThumbImg = ({ thumbPath, size }) => {
-  const [src, setSrc] = useState(null);
-  useEffect(() => {
-    if (!thumbPath) return;
-    if (window.dockyard?.readThumb) {
-      window.dockyard.readThumb(thumbPath).then(data => {
-        if (data) setSrc(data);
-      });
-    }
-  }, [thumbPath]);
-  if (!src) return null;
-  return <img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",position:"relative",zIndex:1}}/>;
-};
-
 const AssetThumb = ({ asset, size=80 }) => {
   const s = size;
   const num = parseInt(asset.id?.replace(/\D/g,"").slice(-3)||"42");
@@ -80,7 +66,9 @@ const AssetThumb = ({ asset, size=80 }) => {
     return (
       <div style={{width:s,height:s,position:"relative",overflow:"hidden",background:C.bgElevated,border:`1px solid ${C.borderMed}`}}>
         <div style={SCAN}/>
-        <ThumbImg thumbPath={asset.thumb_path} size={s}/>
+        <img src={`file://${asset.thumb_path}`} alt=""
+          style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
+          onError={e=>{e.target.style.display='none';}}/>
       </div>
     );
   }
