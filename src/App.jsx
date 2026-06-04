@@ -814,9 +814,26 @@ export default function App() {
     notify(`IMPORTED ${imported.length} FILE${imported.length>1?"S":""}`);
   },[activeContainerId,activeContainer,activeProjectId]);
 
-  const handleStartDrag = useCallback((asset, extraPaths=[])=>{
-    if (asset.file_path) api.startDrag({filePath:asset.file_path,thumbPath:asset.thumb_path||''});
-  },[]);
+  const handleStartDrag = useCallback((asset)=>{
+    if (!asset.file_path) return;
+    // If multiple files selected, drag them all
+    if (multiSelected && multiSelected.size > 1) {
+      const allAssets = assetMap[activeContainerId] || [];
+      const selectedPaths = allAssets
+        .filter(a => multiSelected.has(a.id) && a.file_path)
+        .map(a => a.file_path);
+      if (selectedPaths.length > 1) {
+        api.startDrag({
+          filePath: asset.file_path,
+          thumbPath: asset.thumb_path || '',
+          filePaths: selectedPaths
+        });
+        return;
+      }
+    }
+    // Single file drag
+    api.startDrag({filePath: asset.file_path, thumbPath: asset.thumb_path || ''});
+  },[multiSelected, assetMap, activeContainerId]);
 
   const makeDragHandlers = (asset) => ({
     draggable: !!asset.file_path,
