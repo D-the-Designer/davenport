@@ -775,30 +775,29 @@ export default function App() {
   const notify=(msg,ms=3000)=>{setNotification(msg);setTimeout(()=>setNotification(null),ms);};
 
   // ── SNAP TO DOCK ────────────────────────────────────────────────────────
-  // Poll for snap opportunity while window is being moved
-  useEffect(()=>{
+  // Check snap on demand — called when user stops moving window
+  const checkSnap = useCallback(async()=>{
+    if (snapState?.phase==='docked') return;
     const api2 = window.dockyard;
     if (!api2?.checkSnap) return;
+    const result = await api2.checkSnap();
+    if (result) {
+      setSnapState({ edge: result.edge, appName: result.appName, phase: 'approach', snapData: result });
+    } else {
+      setSnapState(null);
+    }
+  },[snapState]);
 
-    // Check snap state periodically
-    const interval = setInterval(async()=>{
-      const result = await api2.checkSnap();
-      if (result) {
-        setSnapState(s => {
-          // Already docked to this app+edge — don't re-trigger
-          if (s?.phase==='docked' && s?.appName===result.appName && s?.edge===result.edge) return s;
-          return { edge: result.edge, appName: result.appName, phase: 'approach', snapData: result };
-        });
-      } else {
-        setSnapState(s => {
-          if (s?.phase==='docked') return s; // Stay docked
-          return null;
-        });
-      }
-    }, 200);
-
-    return () => clearInterval(interval);
-  }, []);
+  // Check snap when window stops moving — listen for mousemove end on the drag area
+  useEffect(()=>{
+    let timer = null;
+    const onMove = () => {
+      clearTimeout(timer);
+      timer = setTimeout(checkSnap, 300);
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => { window.removeEventListener('mousemove', onMove); clearTimeout(timer); };
+  },[checkSnap]);
 
   const handleSnap = async() => {
     if (!snapState?.snapData) return;
