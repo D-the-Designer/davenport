@@ -760,6 +760,8 @@ export default function App() {
   const [activeContainerId,setActiveContainerId] = useState(null);
   const [selectedAssetId,setSelectedAssetId] = useState(null);
   const [multiSelected,setMultiSelected] = useState(new Set());
+  const [snapState,setSnapState] = useState(null);
+  const snapCheckRef = useRef(null);
   const [narrow,setNarrow]           = useState(false);
   const [alwaysOnTop,setAlwaysOnTop] = useState(false);
   const [dataDir,setDataDir]         = useState("");
