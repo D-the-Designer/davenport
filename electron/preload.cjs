@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('dockyard', {
   importFilesDialog:   (d)    => ipcRenderer.invoke('import-files-dialog', d),
   importDroppedFiles:  (d)    => ipcRenderer.invoke('import-dropped-files', d),
   startDrag:           (d)    => ipcRenderer.send('start-drag', d),
+  startDragMulti:      (d)    => ipcRenderer.send('start-drag', d),
   openFile:            (fp)   => ipcRenderer.invoke('open-file', fp),
   getDataDir:          ()     => ipcRenderer.invoke('get-data-dir'),
   toggleAlwaysOnTop:   ()     => ipcRenderer.invoke('toggle-always-on-top'),
