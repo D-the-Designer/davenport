@@ -309,26 +309,27 @@ let overlayWindow = null;
 
 function getFrontmostWindowBounds() {
   try {
-    const { execSync } = require('child_process');
-    // Use AppleScript to get frontmost app window bounds
-    const script = `
-      tell application "System Events"
-        set frontApp to first application process whose frontmost is true
-        set appName to name of frontApp
-        tell frontApp
-          if (count of windows) > 0 then
-            set w to first window
-            set {x, y} to position of w
-            set {ww, wh} to size of w
-            return appName & "," & x & "," & y & "," & ww & "," & wh
-          end if
-        end tell
-      end tell
-    `;
-    const result = execSync(`osascript -e '${script}'`, { timeout: 500 }).toString().trim();
-    const [appName, x, y, w, h] = result.split(',');
-    if (!appName || appName === 'Electron') return null;
-    return { appName, x: parseInt(x), y: parseInt(y), width: parseInt(w), height: parseInt(h) };
+    const { execFileSync } = require('child_process');
+    const script = [
+      'tell application "System Events"',
+      'set frontApp to first application process whose frontmost is true',
+      'set appName to name of frontApp',
+      'tell frontApp',
+      'if (count of windows) > 0 then',
+      'set w to first window',
+      'set {x, y} to position of w',
+      'set {ww, wh} to size of w',
+      'return appName & "," & x & "," & y & "," & ww & "," & wh',
+      'end if',
+      'end tell',
+      'end tell',
+    ].join('\n');
+    const result = execFileSync('osascript', ['-e', script], { timeout: 300, encoding: 'utf8' }).trim();
+    const parts = result.split(',');
+    if (parts.length < 5) return null;
+    const [appName, x, y, w, h] = parts;
+    if (!appName || appName.trim() === 'Electron' || appName.trim() === 'dockyard') return null;
+    return { appName: appName.trim(), x: parseInt(x), y: parseInt(y), width: parseInt(w), height: parseInt(h) };
   } catch(e) {
     return null;
   }
