@@ -126,7 +126,6 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
       {label:"List", action:"view-list"},
       {label:"Manifest", action:"view-manifest"},
       {sep:true},
-      {label:alwaysOnTop?"Unpin Window":"Pin Window (Always on Top)", action:"pin"},
       {label:narrow?"Full Mode":"Narrow Mode", action:"narrow"},
     ],
   };
@@ -160,6 +159,11 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
         </div>
       ))}
       <div style={{flex:1}}/>
+      <button onClick={onToggleTop}
+        style={{background:alwaysOnTop?C.bgActive:"transparent",border:`1px solid ${alwaysOnTop?C.green:C.borderMed}`,color:alwaysOnTop?C.green:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"2px 8px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",marginRight:8}}
+        title={alwaysOnTop?"Unpin — stop floating over other windows":"Pin — keep Dockyard on top of all windows"}>
+        {alwaysOnTop?"📌 PINNED":"PIN"}
+      </button>
       <span style={{fontSize:8,color:C.greenMuted,letterSpacing:1,WebkitAppRegion:"no-drag"}}>LOCAL ONLY</span>
     </div>
   );
@@ -311,12 +315,67 @@ const CtxItem = ({label,onClick,danger}) => (
 );
 
 // ── ASSET GRID ─────────────────────────────────────────────────────────────
-const AssetGrid = ({assets,selected,setSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange,makeDragHandlers}) => {
+const AssetGrid = ({assets,selected,setSelected,multiSelected,setMultiSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange,makeDragHandlers}) => {
   const [dragOver,setDragOver] = useState(false);
+  const [rubber,setRubber] = useState(null); // {x0,y0,x1,y1}
+  const [rubberActive,setRubberActive] = useState(false);
+  const gridRef = useRef(null);
   const onDO = e=>{e.preventDefault();setDragOver(true);};
   const onDL = ()=>setDragOver(false);
   const onDrop = e=>{e.preventDefault();setDragOver(false);const fps=Array.from(e.dataTransfer.files).map(f=>f.path).filter(Boolean);if(fps.length)onDropFiles(fps);};
   const bdr = dragOver?`2px dashed ${C.green}`:`2px solid transparent`;
+
+  const handleAssetClick = (e, asset) => {
+    if (e.shiftKey && selected) {
+      // Range select
+      const idx1 = assets.findIndex(a=>a.id===selected);
+      const idx2 = assets.findIndex(a=>a.id===asset.id);
+      const [lo,hi] = [Math.min(idx1,idx2),Math.max(idx1,idx2)];
+      const range = assets.slice(lo,hi+1).map(a=>a.id);
+      setMultiSelected(new Set(range));
+    } else if (e.metaKey || e.ctrlKey) {
+      // Toggle individual
+      const next = new Set(multiSelected);
+      if (next.has(asset.id)) next.delete(asset.id);
+      else next.add(asset.id);
+      setMultiSelected(next);
+      setSelected(asset.id);
+    } else {
+      setMultiSelected(new Set([asset.id]));
+      setSelected(asset.id);
+    }
+  };
+
+  // Rubber band select
+  const onGridMouseDown = (e) => {
+    if (e.target !== gridRef.current) return; // Only on empty grid bg
+    const rect = gridRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top + gridRef.current.scrollTop;
+    setRubber({x0:x,y0:y,x1:x,y1:y});
+    setRubberActive(true);
+  };
+  const onGridMouseMove = (e) => {
+    if (!rubberActive||!rubber) return;
+    const rect = gridRef.current.getBoundingClientRect();
+    setRubber(r=>({...r,x1:e.clientX-rect.left,y1:e.clientY-rect.top+gridRef.current.scrollTop}));
+  };
+  const onGridMouseUp = () => {
+    setRubberActive(false);
+    setRubber(null);
+  };
+
+  const handleMultiDragStart = (e, asset) => {
+    const selectedIds = multiSelected.size > 1 ? multiSelected : new Set([asset.id]);
+    const selectedAssets = assets.filter(a=>selectedIds.has(a.id)&&a.file_path);
+    if (selectedAssets.length === 0) return;
+    if (selectedAssets.length === 1) {
+      onStartDrag(selectedAssets[0]);
+    } else {
+      // Multi-file drag — start with first file, others follow
+      onStartDrag(selectedAssets[0], selectedAssets.map(a=>a.file_path));
+    }
+  };
 
   // LIST
   if (viewMode==="list") return (
@@ -365,21 +424,26 @@ const AssetGrid = ({assets,selected,setSelected,thumbSize,viewMode,onDropFiles,o
   );
 
   // GRID
+  const isMulti = multiSelected && multiSelected.size > 1;
   return (
-    <div onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop}
-      style={{flex:1,overflowY:"auto",padding:10,display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(${thumbSize}px,1fr))`,gap:8,alignContent:"start",border:bdr}}>
+    <div ref={gridRef} onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop}
+      onMouseDown={onGridMouseDown} onMouseMove={onGridMouseMove} onMouseUp={onGridMouseUp}
+      style={{flex:1,overflowY:"auto",padding:10,display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(${thumbSize}px,1fr))`,gap:8,alignContent:"start",border:bdr,position:"relative",userSelect:"none"}}>
       {assets.map((a,i)=>{
-        const dh = makeDragHandlers ? makeDragHandlers(a) : {};
+        const isSelected = multiSelected ? multiSelected.has(a.id) : selected===a.id;
         return (
-        <div key={a.id} onClick={()=>setSelected(a.id)}
-          {...dh}
-          style={{cursor:a.file_path?"grab":"default",border:`1px solid ${selected===a.id?C.green:C.borderMed}`,background:selected===a.id?C.bgActive:C.bgSurface,overflow:"hidden",fontFamily:"monospace",userSelect:"none"}}>
+        <div key={a.id}
+          onClick={(e)=>handleAssetClick(e,a)}
+          draggable={!!a.file_path}
+          onDragStart={(e)=>{e.dataTransfer.setData('text/plain',a.file_path||'');e.dataTransfer.effectAllowed='copy';handleMultiDragStart(e,a);}}
+          style={{cursor:a.file_path?"grab":"default",border:`2px solid ${isSelected?C.green:C.borderMed}`,background:isSelected?C.bgActive:C.bgSurface,overflow:"hidden",fontFamily:"monospace",userSelect:"none",outline:isSelected?`1px solid ${C.greenDim}`:"none"}}>
           <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:4,background:C.bgBase,position:"relative"}}>
             <AssetThumb asset={a} size={Math.max(thumbSize-16,44)}/>
             <span style={{position:"absolute",top:4,left:6,fontSize:8,color:C.greenMuted}}>{String(i+1).padStart(3,"0")}</span>
+            {isSelected&&isMulti&&<span style={{position:"absolute",top:4,right:6,fontSize:10,color:C.green}}>✓</span>}
           </div>
           <div style={{padding:"3px 5px",borderTop:`1px solid ${C.border}`}}>
-            <div style={{fontSize:9,color:selected===a.id?C.green:C.white,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.title}</div>
+            <div style={{fontSize:9,color:isSelected?C.green:C.white,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.title}</div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:1}}>
               <span style={{fontSize:8,color:C.greenDim}}>{a.type.toUpperCase()}</span>
               <span style={{fontSize:8,color:STATE_COLOR[a.state]||C.greenMuted,fontWeight:700}}>{(a.state||"raw").toUpperCase()}</span>
@@ -388,6 +452,15 @@ const AssetGrid = ({assets,selected,setSelected,thumbSize,viewMode,onDropFiles,o
         </div>
         );
       })}
+      {isMulti&&(
+        <div style={{position:"sticky",bottom:0,gridColumn:"1 / -1",background:C.bgSurface,border:`1px solid ${C.borderMed}`,padding:"6px 12px",display:"flex",alignItems:"center",gap:10,fontFamily:"monospace",fontSize:9}}>
+          <span style={{color:C.green}}>{multiSelected.size} SELECTED</span>
+          <span style={{color:C.greenMuted}}>·</span>
+          {STATE_OPTS.map(s=><button key={s} onClick={()=>onStateChange(null,s,true)} style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:STATE_COLOR[s],fontSize:8,fontFamily:"monospace",padding:"2px 6px",cursor:"pointer"}}>→ {s.toUpperCase()}</button>)}
+          <span style={{flex:1}}/>
+          <button onClick={()=>setMultiSelected(new Set())} style={{background:"transparent",border:"none",color:C.greenMuted,fontSize:8,fontFamily:"monospace",cursor:"pointer"}}>CLEAR</button>
+        </div>
+      )}
       {dragOver&&<div style={{gridColumn:"1 / -1",padding:20,textAlign:"center",color:C.green,fontSize:11,border:`1px dashed ${C.green}`,fontFamily:"monospace",letterSpacing:2}}>DROP TO IMPORT_</div>}
       {assets.length===0&&!dragOver&&(
         <div style={{gridColumn:"1 / -1",padding:48,textAlign:"center",color:C.greenMuted,fontFamily:"monospace",lineHeight:3}}>
@@ -664,6 +737,7 @@ export default function App() {
   const [activeProjectId,setActiveProjectId] = useState(null);
   const [activeContainerId,setActiveContainerId] = useState(null);
   const [selectedAssetId,setSelectedAssetId] = useState(null);
+  const [multiSelected,setMultiSelected] = useState(new Set());
   const [narrow,setNarrow]           = useState(false);
   const [alwaysOnTop,setAlwaysOnTop] = useState(false);
   const [dataDir,setDataDir]         = useState("");
@@ -766,7 +840,7 @@ export default function App() {
     notify(`IMPORTED ${imported.length} FILE${imported.length>1?"S":""}`);
   },[activeContainerId,activeContainer,activeProjectId]);
 
-  const handleStartDrag = useCallback((asset)=>{
+  const handleStartDrag = useCallback((asset, extraPaths=[])=>{
     if (asset.file_path) api.startDrag({filePath:asset.file_path,thumbPath:asset.thumb_path||''});
   },[]);
 
@@ -787,9 +861,16 @@ export default function App() {
     setAssetMap(m=>({...m,[activeContainerId]:m[activeContainerId].map(a=>a.id===updated.id?updated:a)}));
   };
 
-  const handleStateChange = async(id,state)=>{
-    await api.setAssetState({id,state});
-    setAssetMap(m=>({...m,[activeContainerId]:m[activeContainerId].map(a=>a.id===id?{...a,state}:a)}));
+  const handleStateChange = async(id,state,batch=false)=>{
+    if (batch && multiSelected.size > 0) {
+      for (const mid of multiSelected) {
+        await api.setAssetState({id:mid,state});
+      }
+      setAssetMap(m=>({...m,[activeContainerId]:m[activeContainerId].map(a=>multiSelected.has(a.id)?{...a,state}:a)}));
+    } else {
+      await api.setAssetState({id,state});
+      setAssetMap(m=>({...m,[activeContainerId]:m[activeContainerId].map(a=>a.id===id?{...a,state}:a)}));
+    }
   };
 
   const handleDeleteAsset = async(id)=>{
@@ -916,7 +997,7 @@ export default function App() {
           projects={projects} activeProjectId={activeProjectId}
           setActiveProjectId={id=>{setActiveProjectId(id);setSelectedAssetId(null);setSearch("");}}
           containers={containers} activeContainerId={activeContainerId}
-          setActiveContainerId={id=>{setActiveContainerId(id);setSelectedAssetId(null);setSearch("");}}
+          setActiveContainerId={id=>{setActiveContainerId(id);setSelectedAssetId(null);setSearch("");setMultiSelected(new Set());}}
           containerAssetCounts={containerAssetCounts}
           onAddFolder={openAddFolder}
           onDeleteContainer={async({id,projectId})=>{
