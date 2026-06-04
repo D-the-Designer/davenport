@@ -4,6 +4,12 @@ const fs = require('fs');
 const os = require('os');
 
 nativeTheme.themeSource = 'dark';
+
+// Must be called before app is ready
+const { protocol } = require('electron');
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'dockyard', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } }
+]);
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 const DOCKYARD_DIR = path.join(os.homedir(), 'Dockyard');
@@ -161,11 +167,16 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // Register custom protocol for serving local files (thumbnails, assets)
-  const { protocol } = require('electron');
+  // Register file protocol for local thumbnails and assets
   protocol.registerFileProtocol('dockyard', (request, callback) => {
-    const filePath = decodeURIComponent(request.url.replace('dockyard://', ''));
-    callback({ path: filePath });
+    try {
+      const url = request.url.replace('dockyard://', '');
+      const filePath = decodeURIComponent(url);
+      callback({ path: filePath });
+    } catch(e) {
+      console.error('[PROTOCOL] Error:', e);
+      callback({ error: -2 });
+    }
   });
   createWindow();
 });
@@ -245,6 +256,20 @@ ipcMain.on('start-drag', (event, { filePath, thumbPath }) => {
 });
 
 ipcMain.handle('open-file', (_, fp) => { if (fp && fs.existsSync(fp)) shell.openPath(fp); });
+
+// Read a local file as base64 data URL for display in renderer
+ipcMain.handle('read-thumb', (_, filePath) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    const data = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase().replace('.', '');
+    const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+    return `data:${mime};base64,${data.toString('base64')}`;
+  } catch(e) {
+    console.error('[THUMB READ]', e.message);
+    return null;
+  }
+});
 
 // Regenerate thumbnails for assets that don't have them
 ipcMain.handle('regen-thumbnails', async (_, { containerId }) => {
