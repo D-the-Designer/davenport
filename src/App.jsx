@@ -827,12 +827,14 @@ export default function App() {
     const ms = multiSelectedRef.current;
     const am = assetMapRef.current;
     const cid = activeContainerIdRef.current;
+    console.log('[DRAG] handleStartDrag called, ms.size=', ms.size, 'cid=', cid);
     // Multi-file drag
     if (ms && ms.size > 1) {
       const allAssets = am[cid] || [];
       const selectedPaths = allAssets
         .filter(a => ms.has(a.id) && a.file_path)
         .map(a => a.file_path);
+      console.log('[DRAG] selectedPaths=', selectedPaths);
       if (selectedPaths.length > 1) {
         console.log('[DRAG] Multi-drag', selectedPaths.length, 'files');
         api.startDrag({
@@ -844,6 +846,7 @@ export default function App() {
       }
     }
     // Single file drag
+    console.log('[DRAG] Single drag:', asset.file_path);
     api.startDrag({filePath: asset.file_path, thumbPath: asset.thumb_path || ''});
   },[]);
 
