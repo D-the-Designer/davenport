@@ -303,6 +303,137 @@ ipcMain.handle('regen-thumbnails', async (_, { containerId }) => {
 ipcMain.handle('get-data-dir', () => DOCKYARD_DIR);
 ipcMain.handle('toggle-always-on-top', () => { alwaysOnTop=!alwaysOnTop; mainWindow.setAlwaysOnTop(alwaysOnTop,'floating'); return alwaysOnTop; });
 
+// ── SNAP TO DOCK ─────────────────────────────────────────────────────────
+let dockedTo = null; // { bounds, edge, followInterval }
+let overlayWindow = null;
+
+function getFrontmostWindowBounds() {
+  try {
+    const { execSync } = require('child_process');
+    // Use AppleScript to get frontmost app window bounds
+    const script = `
+      tell application "System Events"
+        set frontApp to first application process whose frontmost is true
+        set appName to name of frontApp
+        tell frontApp
+          if (count of windows) > 0 then
+            set w to first window
+            set {x, y} to position of w
+            set {ww, wh} to size of w
+            return appName & "," & x & "," & y & "," & ww & "," & wh
+          end if
+        end tell
+      end tell
+    `;
+    const result = execSync(`osascript -e '${script}'`, { timeout: 500 }).toString().trim();
+    const [appName, x, y, w, h] = result.split(',');
+    if (!appName || appName === 'Electron') return null;
+    return { appName, x: parseInt(x), y: parseInt(y), width: parseInt(w), height: parseInt(h) };
+  } catch(e) {
+    return null;
+  }
+}
+
+function getSnapEdge(dockyardBounds, targetBounds, threshold = 60) {
+  const dock = dockyardBounds;
+  const target = targetBounds;
+  
+  // Distance from each edge of target
+  const distRight  = Math.abs((dock.x) - (target.x + target.width));
+  const distLeft   = Math.abs((dock.x + dock.width) - target.x);
+  const distTop    = Math.abs((dock.y + dock.height) - target.y);
+  const distBottom = Math.abs((dock.y) - (target.y + target.height));
+
+  const min = Math.min(distRight, distLeft, distTop, distBottom);
+  if (min > threshold) return null;
+  
+  if (min === distRight)  return 'right';
+  if (min === distLeft)   return 'left';
+  if (min === distTop)    return 'top';
+  if (min === distBottom) return 'bottom';
+  return null;
+}
+
+function getSnappedPosition(edge, targetBounds, dockyardBounds) {
+  const t = targetBounds;
+  const d = dockyardBounds;
+  switch(edge) {
+    case 'right':  return { x: t.x + t.width, y: t.y, width: d.width, height: t.height };
+    case 'left':   return { x: t.x - d.width, y: t.y, width: d.width, height: t.height };
+    case 'top':    return { x: t.x, y: t.y - d.height, width: t.width, height: d.height };
+    case 'bottom': return { x: t.x, y: t.y + t.height, width: t.width, height: d.height };
+  }
+}
+
+ipcMain.handle('check-snap', () => {
+  try {
+    const target = getFrontmostWindowBounds();
+    if (!target) return null;
+    
+    const dockyardBounds = mainWindow.getBounds();
+    const edge = getSnapEdge(dockyardBounds, target, 80);
+    
+    if (edge) {
+      const snapPos = getSnappedPosition(edge, target, dockyardBounds);
+      return { edge, target, snapPos, appName: target.appName };
+    }
+    return null;
+  } catch(e) {
+    return null;
+  }
+});
+
+ipcMain.handle('do-snap', (_, { edge, target, appName }) => {
+  try {
+    const dockyardBounds = mainWindow.getBounds();
+    const snapPos = getSnappedPosition(edge, target, dockyardBounds);
+    
+    mainWindow.setBounds({
+      x: Math.round(snapPos.x),
+      y: Math.round(snapPos.y),
+      width: Math.round(snapPos.width),
+      height: Math.round(snapPos.height),
+    }, true); // animate
+    
+    mainWindow.setAlwaysOnTop(true, 'floating');
+    
+    // Start following the target window
+    if (dockedTo?.followInterval) clearInterval(dockedTo.followInterval);
+    dockedTo = {
+      appName,
+      edge,
+      followInterval: setInterval(() => {
+        try {
+          const newTarget = getFrontmostWindowBounds();
+          if (!newTarget || newTarget.appName !== appName) return;
+          const newSnap = getSnappedPosition(edge, newTarget, mainWindow.getBounds());
+          const curr = mainWindow.getBounds();
+          if (Math.abs(curr.x - newSnap.x) > 2 || Math.abs(curr.y - newSnap.y) > 2) {
+            mainWindow.setBounds({ x: Math.round(newSnap.x), y: Math.round(newSnap.y), width: Math.round(newSnap.width), height: Math.round(newSnap.height) });
+          }
+        } catch(e) {}
+      }, 100)
+    };
+    
+    return { success: true, appName, edge };
+  } catch(e) {
+    console.error('[SNAP]', e.message);
+    return { success: false };
+  }
+});
+
+ipcMain.handle('do-undock', () => {
+  if (dockedTo?.followInterval) clearInterval(dockedTo.followInterval);
+  dockedTo = null;
+  return true;
+});
+
+ipcMain.handle('get-dock-state', () => {
+  return dockedTo ? { docked: true, appName: dockedTo.appName, edge: dockedTo.edge } : { docked: false };
+});
+
+ipcMain.handle('get-window-bounds', () => mainWindow.getBounds());
+
 ipcMain.handle('export-container', async (_, { container, assets, project }) => {
   const sn = safeName(container.name);
   const result = await dialog.showSaveDialog(mainWindow, {
