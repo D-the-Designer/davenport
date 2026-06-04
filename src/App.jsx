@@ -121,11 +121,7 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
       {sep:true},
       {label:"Export Container...", action:"export"},
     ],
-    VIEW: [
-      {label:"Grid", action:"view-grid"},
-      {label:"List", action:"view-list"},
-      {label:"Manifest", action:"view-manifest"},
-    ],
+
   };
   return (
     <div style={{flexShrink:0,fontFamily:"monospace",WebkitAppRegion:"drag",position:"relative",zIndex:50}}>
@@ -182,33 +178,31 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
 };
 
 // ── TOOLBAR ────────────────────────────────────────────────────────────────
-const Toolbar = ({path,onBack,onAddFolder,onManifest,onNotes,onRegenThumbs,count,viewMode,setViewMode,thumbSize,setThumbSize,search,setSearch,onImport}) => (
-  <div style={{height:36,background:C.bgSurface,borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:8,padding:"0 10px",flexShrink:0,fontFamily:"monospace"}}>
-    <button onClick={onBack} style={tbtn()} title="Back">←</button>
-    <div style={{width:1,height:16,background:C.border}}/>
-    <span style={{fontSize:9,color:C.greenDim,letterSpacing:1,flex:"0 0 auto"}}>{path}</span>
+const Toolbar = ({path,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode,search,setSearch,onImport}) => (
+  <div style={{height:36,background:C.bgSurface,borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:6,padding:"0 10px",flexShrink:0,fontFamily:"monospace"}}>
+    {/* Path breadcrumb */}
+    <span style={{fontSize:9,color:C.greenDim,letterSpacing:1,flex:"0 0 auto",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{path||"—"}</span>
     <div style={{flex:1}}/>
-    <button onClick={onAddFolder} style={tbtnGreen()} title="Add Folder">+ ADD FOLDER</button>
+    {/* Primary actions */}
+    <button onClick={onAddFolder} style={tbtnGreen()} title="Add folder">+ ADD FOLDER</button>
     <div style={{width:1,height:16,background:C.border}}/>
-    <button onClick={onManifest} style={tbtn()} title="Manifest view">MANIFEST</button>
-    <button onClick={onNotes} style={tbtn()} title="Notes">NOTES</button>
-    <button onClick={onRegenThumbs} style={tbtn()} title="Regenerate thumbnails">⟳ THUMBS</button>
+    <button onClick={onNotes} style={tbtn()} title="View/edit folder notes">NOTES</button>
     <div style={{width:1,height:16,background:C.border}}/>
+    {/* Search */}
     <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="SEARCH_"
       style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,padding:"2px 6px",width:100,outline:"none",fontFamily:"monospace",letterSpacing:1}}/>
     <div style={{width:1,height:16,background:C.border}}/>
-    {["⊞","☰","≋"].map((icon,i)=>{
-      const modes=["grid","list","manifest"];
-      return <button key={i} onClick={()=>setViewMode(modes[i])} style={viewMode===modes[i]?tbtnActive():tbtn()} title={modes[i]}>{icon}</button>;
-    })}
-    <input type="range" min={60} max={140} value={thumbSize} onChange={e=>setThumbSize(+e.target.value)} style={{width:44,accentColor:C.green}}/>
+    {/* View mode — always visible, no menu needed */}
+    <div style={{display:"flex",gap:2}}>
+      {[["⊞","grid","Grid view"],["☰","list","List view"],["≋","manifest","Manifest — audit all files"]].map(([icon,mode,title])=>(
+        <button key={mode} onClick={()=>setViewMode(mode)} title={title}
+          style={viewMode===mode?tbtnActive():tbtn()}>{icon}</button>
+      ))}
+    </div>
+    <div style={{width:1,height:16,background:C.border}}/>
     <span style={{fontSize:8,color:C.greenMuted,letterSpacing:1,minWidth:50,textAlign:"right"}}>{count} ITEMS</span>
   </div>
 );
-
-const tbtn = () => ({background:"transparent",border:"none",color:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"3px 6px",cursor:"pointer",letterSpacing:1});
-const tbtnActive = () => ({background:C.bgActive,border:`1px solid ${C.borderBright}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"3px 6px",cursor:"pointer",letterSpacing:1});
-const tbtnGreen = () => ({background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"3px 8px",cursor:"pointer",letterSpacing:1});
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────
 const FolderRow = ({container,depth,active,containers,activeContainerId,containerAssetCounts,setActiveProjectId,setActiveContainerId,onAddFolder,onDeleteContainer,projectId,ctxMenu,setCtxMenu}) => {
