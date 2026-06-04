@@ -337,20 +337,19 @@ const AssetGrid = ({assets,selected,setSelected,multiSelected,setMultiSelected,t
 
   const handleAssetClick = (e, asset) => {
     if (e.shiftKey && selected) {
-      // Range select
       const idx1 = assets.findIndex(a=>a.id===selected);
       const idx2 = assets.findIndex(a=>a.id===asset.id);
       const [lo,hi] = [Math.min(idx1,idx2),Math.max(idx1,idx2)];
       const range = assets.slice(lo,hi+1).map(a=>a.id);
       setMultiSelected(new Set(range));
+      // Don't change primary selected for inspector
     } else if (e.metaKey || e.ctrlKey) {
-      // Toggle individual
       const next = new Set(multiSelected);
       if (next.has(asset.id)) next.delete(asset.id);
-      else next.add(asset.id);
+      else { next.add(asset.id); setSelected(asset.id); }
       setMultiSelected(next);
-      setSelected(asset.id);
     } else {
+      // Plain click — single select, show in inspector
       setMultiSelected(new Set([asset.id]));
       setSelected(asset.id);
     }
