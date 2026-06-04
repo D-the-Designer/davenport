@@ -38,6 +38,9 @@ const api = window.dockyard || {
   startDrag:()=>{}, openFile:()=>Promise.resolve(),
   getDataDir:()=>Promise.resolve('~/Dockyard'), toggleAlwaysOnTop:()=>Promise.resolve(false),
   exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null), regenerateThumbnails:()=>Promise.resolve({count:0}),
+  checkSnap:()=>Promise.resolve(null), doSnap:()=>Promise.resolve({success:false}),
+  doUndock:()=>Promise.resolve(true), getDockState:()=>Promise.resolve({docked:false}),
+  getWindowBounds:()=>Promise.resolve({}),
 };
 
 const DEFAULT_CONTAINERS = [
@@ -738,7 +741,6 @@ const ConnectorWidget = ({snapState, onSnap, onUndock}) => {
             background:"rgba(8,12,9,0.92)", border:`1px dashed ${C.green}`,
             color:C.green, fontSize:9, padding:"6px 10px", cursor:"pointer",
             letterSpacing:1, textAlign:"center", lineHeight:1.8, opacity:0.85,
-            animation:"pulse 1s infinite",
           }}
           title="Click to snap">
           DOCK HERE?<br/>
