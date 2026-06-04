@@ -363,7 +363,7 @@ const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,th
         <div key={a.id}
           onClick={(e)=>handleClick(e,a)}
           draggable={!!a.file_path}
-          onDragStart={(e)=>{e.dataTransfer.setData('text/plain',a.file_path||'');e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}
+          onDragStart={(e)=>{e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}
           style={{display:"grid",gridTemplateColumns:"36px 1fr 70px 80px 60px",gap:"0 8px",alignItems:"center",padding:"5px 12px",background:isSelected(a.id)?C.bgActive:"transparent",borderLeft:`2px solid ${isSelected(a.id)?C.green:"transparent"}`,cursor:"pointer",borderBottom:`1px solid ${C.border}`}}>
           <span style={{fontSize:9,color:C.greenMuted}}>{String(i+1).padStart(3,"0")}</span>
           <span style={{fontSize:10,color:isSelected(a.id)?C.green:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.title}</span>
@@ -407,7 +407,7 @@ const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,th
         <div key={a.id}
           onClick={(e)=>handleClick(e,a)}
           draggable={!!a.file_path}
-          onDragStart={(e)=>{e.dataTransfer.setData('text/plain',a.file_path||'');e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}
+          onDragStart={(e)=>{e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}
           style={{cursor:a.file_path?"grab":"default",border:`2px solid ${isSelected(a.id)?C.green:C.borderMed}`,background:isSelected(a.id)?C.bgActive:C.bgSurface,overflow:"hidden",fontFamily:"monospace",userSelect:"none"}}>
           <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:4,background:C.bgBase,position:"relative"}}>
             <AssetThumb asset={a} size={Math.max(thumbSize-16,44)}/>
@@ -576,7 +576,7 @@ const NarrowStrip = ({assets,containerName,onExpand,onStartDrag,onDropFiles,onSt
       <div style={{flex:1,overflowY:"auto",padding:"4px 0"}}>
         {assets.map((a,i)=>(
           <div key={a.id} style={{borderBottom:`1px solid ${C.border}`,padding:"4px 6px",display:"flex",alignItems:"center",gap:6}}>
-            <div draggable={!!a.file_path} onDragStart={(e)=>{if(a.file_path){e.dataTransfer.setData('text/plain',a.file_path);e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}} style={{cursor:a.file_path?'grab':'default',flexShrink:0}}>
+            <div draggable={!!a.file_path} onDragStart={(e)=>{if(a.file_path){e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}} style={{cursor:a.file_path?'grab':'default',flexShrink:0}}>
               <AssetThumb asset={a} size={40}/>
             </div>
             <div style={{flex:1,overflow:"hidden"}}>
@@ -852,7 +852,6 @@ export default function App() {
     onDragStart: (e) => {
       if (!asset.file_path) return;
       // Set drag data for in-app drops
-      e.dataTransfer.setData('text/plain', asset.file_path);
       e.dataTransfer.effectAllowed = 'copy';
       // Trigger Electron native drag-out
       api.startDrag({filePath: asset.file_path, thumbPath: asset.thumb_path||''});
