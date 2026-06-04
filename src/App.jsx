@@ -66,9 +66,9 @@ const AssetThumb = ({ asset, size=80 }) => {
     return (
       <div style={{width:s,height:s,position:"relative",overflow:"hidden",background:C.bgElevated,border:`1px solid ${C.borderMed}`}}>
         <div style={SCAN}/>
-        <img src={asset.thumb_path ? `file://${asset.thumb_path.replace(/\\/g,'/')}` : ''} alt="" 
+        <img src={asset.thumb_path ? `dockyard://${asset.thumb_path}` : ''} alt="" 
              style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} 
-             onError={e=>{e.target.style.display='none';}}/>
+             onError={e=>{console.log('IMG FAIL:', asset.thumb_path); e.target.style.display='none';}}/>
       </div>
     );
   }
