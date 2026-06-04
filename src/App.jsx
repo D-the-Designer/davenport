@@ -325,90 +325,60 @@ const CtxItem = ({label,onClick,danger}) => (
 );
 
 // ── ASSET GRID ─────────────────────────────────────────────────────────────
-const AssetGrid = ({assets,selected,setSelected,multiSelected,setMultiSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange,makeDragHandlers}) => {
+const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange}) => {
   const [dragOver,setDragOver] = useState(false);
-  const [rubber,setRubber] = useState(null); // {x0,y0,x1,y1}
-  const [rubberActive,setRubberActive] = useState(false);
-  const gridRef = useRef(null);
   const onDO = e=>{e.preventDefault();setDragOver(true);};
   const onDL = ()=>setDragOver(false);
   const onDrop = e=>{e.preventDefault();setDragOver(false);const fps=Array.from(e.dataTransfer.files).map(f=>f.path).filter(Boolean);if(fps.length)onDropFiles(fps);};
-  const bdr = dragOver?`2px dashed ${C.green}`:`2px solid transparent`;
 
-  const handleAssetClick = (e, asset) => {
-    if (e.shiftKey && selected) {
-      const idx1 = assets.findIndex(a=>a.id===selected);
+  const handleClick = (e, asset) => {
+    if (e.shiftKey && selectedId) {
+      const idx1 = assets.findIndex(a=>a.id===selectedId);
       const idx2 = assets.findIndex(a=>a.id===asset.id);
-      const [lo,hi] = [Math.min(idx1,idx2),Math.max(idx1,idx2)];
-      const range = assets.slice(lo,hi+1).map(a=>a.id);
-      setMultiSelected(new Set(range));
-      // Don't change primary selected for inspector
+      const [lo,hi] = [Math.min(idx1,idx2), Math.max(idx1,idx2)];
+      setMultiSelected(new Set(assets.slice(lo,hi+1).map(a=>a.id)));
     } else if (e.metaKey || e.ctrlKey) {
       const next = new Set(multiSelected);
       if (next.has(asset.id)) next.delete(asset.id);
-      else { next.add(asset.id); setSelected(asset.id); }
+      else next.add(asset.id);
       setMultiSelected(next);
+      onSelect(asset.id);
     } else {
-      // Plain click — single select, show in inspector
       setMultiSelected(new Set([asset.id]));
-      setSelected(asset.id);
+      onSelect(asset.id);
     }
   };
 
-  // Rubber band select
-  const onGridMouseDown = (e) => {
-    if (e.target !== gridRef.current) return; // Only on empty grid bg
-    const rect = gridRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top + gridRef.current.scrollTop;
-    setRubber({x0:x,y0:y,x1:x,y1:y});
-    setRubberActive(true);
-  };
-  const onGridMouseMove = (e) => {
-    if (!rubberActive||!rubber) return;
-    const rect = gridRef.current.getBoundingClientRect();
-    setRubber(r=>({...r,x1:e.clientX-rect.left,y1:e.clientY-rect.top+gridRef.current.scrollTop}));
-  };
-  const onGridMouseUp = () => {
-    setRubberActive(false);
-    setRubber(null);
-  };
+  const isSelected = (id) => multiSelected.has(id) || selectedId===id;
+  const hasMulti = multiSelected.size > 1;
 
-  const handleMultiDragStart = (e, asset) => {
-    const selectedIds = multiSelected.size > 1 ? multiSelected : new Set([asset.id]);
-    const selectedAssets = assets.filter(a=>selectedIds.has(a.id)&&a.file_path);
-    if (selectedAssets.length === 0) return;
-    if (selectedAssets.length === 1) {
-      onStartDrag(selectedAssets[0]);
-    } else {
-      // Multi-file drag — start with first file, others follow
-      onStartDrag(selectedAssets[0], selectedAssets.map(a=>a.file_path));
-    }
-  };
-
-  // LIST
+  // LIST VIEW
   if (viewMode==="list") return (
-    <div onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop} style={{flex:1,overflowY:"auto",border:bdr,fontFamily:"monospace"}}>
+    <div onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop}
+      style={{flex:1,overflowY:"auto",border:dragOver?`2px dashed ${C.green}`:"2px solid transparent",fontFamily:"monospace"}}>
       <div style={{display:"grid",gridTemplateColumns:"36px 1fr 70px 80px 60px",gap:"0 8px",padding:"4px 12px",borderBottom:`1px solid ${C.border}`,background:C.bgSurface}}>
         {["#","NAME","TYPE","STATE","SIZE"].map(h=><span key={h} style={{fontSize:8,color:C.greenMuted,letterSpacing:2}}>{h}</span>)}
       </div>
       {assets.map((a,i)=>(
-        <div key={a.id} onClick={()=>setSelected(a.id)} draggable={!!a.file_path} onDragStart={(e)=>{if(a.file_path){e.dataTransfer.setData('text/plain',a.file_path);e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}}
-          style={{display:"grid",gridTemplateColumns:"36px 1fr 70px 80px 60px",gap:"0 8px",alignItems:"center",padding:"5px 12px",background:selected===a.id?C.bgActive:"transparent",borderLeft:`2px solid ${selected===a.id?C.green:"transparent"}`,cursor:"pointer",borderBottom:`1px solid ${C.border}`}}>
+        <div key={a.id}
+          onClick={(e)=>handleClick(e,a)}
+          draggable={!!a.file_path}
+          onDragStart={(e)=>{e.dataTransfer.setData('text/plain',a.file_path||'');e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}
+          style={{display:"grid",gridTemplateColumns:"36px 1fr 70px 80px 60px",gap:"0 8px",alignItems:"center",padding:"5px 12px",background:isSelected(a.id)?C.bgActive:"transparent",borderLeft:`2px solid ${isSelected(a.id)?C.green:"transparent"}`,cursor:"pointer",borderBottom:`1px solid ${C.border}`}}>
           <span style={{fontSize:9,color:C.greenMuted}}>{String(i+1).padStart(3,"0")}</span>
-          <span style={{fontSize:10,color:selected===a.id?C.green:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.title}</span>
+          <span style={{fontSize:10,color:isSelected(a.id)?C.green:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.title}</span>
           <span style={{fontSize:9,color:C.greenDim}}>{a.type.toUpperCase()}</span>
           <span style={{fontSize:9,color:STATE_COLOR[a.state]||C.greenMuted,fontWeight:700}}>{(a.state||"raw").toUpperCase()}</span>
           <span style={{fontSize:9,color:C.greenMuted}}>{a.size}</span>
         </div>
       ))}
-      {dragOver&&<div style={{padding:20,textAlign:"center",color:C.green,fontSize:11,border:`1px dashed ${C.green}`,margin:8,fontFamily:"monospace",letterSpacing:2}}>DROP TO IMPORT_</div>}
     </div>
   );
 
-  // MANIFEST
+  // MANIFEST VIEW
   if (viewMode==="manifest") return (
-    <div onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop} style={{flex:1,overflowY:"auto",border:bdr,fontFamily:"monospace"}}>
+    <div onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop}
+      style={{flex:1,overflowY:"auto",border:dragOver?`2px dashed ${C.green}`:"2px solid transparent",fontFamily:"monospace"}}>
       <div style={{padding:"6px 12px",background:C.bgSurface,borderBottom:`1px solid ${C.borderMed}`,display:"flex",gap:12,alignItems:"center"}}>
         <span style={{fontSize:9,color:C.green,letterSpacing:2}}>MANIFEST</span>
         <span style={{fontSize:8,color:C.greenMuted}}>{assets.length} TOTAL · {assets.filter(a=>['approved','final'].includes(a.state)).length} APPROVED/FINAL</span>
@@ -417,51 +387,43 @@ const AssetGrid = ({assets,selected,setSelected,multiSelected,setMultiSelected,t
         {["SEQ","NAME","TYPE","STATE","SIZE"].map(h=><span key={h} style={{fontSize:8,color:C.greenMuted,letterSpacing:2}}>{h}</span>)}
       </div>
       {assets.map((a,i)=>(
-        <div key={a.id} onClick={()=>setSelected(a.id)}
-          style={{display:"grid",gridTemplateColumns:"36px 1fr 70px 90px 60px",gap:"0 8px",alignItems:"center",padding:"6px 12px",background:selected===a.id?C.bgActive:"transparent",borderLeft:`3px solid ${STATE_COLOR[a.state]||C.borderMed}`,cursor:"pointer",borderBottom:`1px solid ${C.border}`}}>
+        <div key={a.id} onClick={(e)=>handleClick(e,a)}
+          style={{display:"grid",gridTemplateColumns:"36px 1fr 70px 90px 60px",gap:"0 8px",alignItems:"center",padding:"6px 12px",background:isSelected(a.id)?C.bgActive:"transparent",borderLeft:`3px solid ${STATE_COLOR[a.state]||C.borderMed}`,cursor:"pointer",borderBottom:`1px solid ${C.border}`}}>
           <span style={{fontSize:9,color:C.greenMuted}}>{String(i+1).padStart(3,"0")}</span>
-          <span style={{fontSize:10,color:selected===a.id?C.green:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.title}</span>
+          <span style={{fontSize:10,color:isSelected(a.id)?C.green:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.title}</span>
           <span style={{fontSize:9,color:C.greenDim}}>{a.type.toUpperCase()}</span>
-          <div style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{fontSize:9,color:STATE_COLOR[a.state]||C.greenMuted,fontWeight:700}}>{(a.state||"raw").toUpperCase()}</span>
-            {['approved','final'].includes(a.state)&&<span style={{color:C.green,fontSize:10}}>✓</span>}
-          </div>
+          <span style={{fontSize:9,color:STATE_COLOR[a.state]||C.greenMuted,fontWeight:700}}>{(a.state||"raw").toUpperCase()}</span>
           <span style={{fontSize:9,color:C.greenMuted}}>{a.size}</span>
         </div>
       ))}
     </div>
   );
 
-  // GRID
-  const isMulti = multiSelected && multiSelected.size > 1;
+  // GRID VIEW
   return (
-    <div ref={gridRef} onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop}
-      onMouseDown={onGridMouseDown} onMouseMove={onGridMouseMove} onMouseUp={onGridMouseUp}
-      style={{flex:1,overflowY:"auto",padding:10,display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(${thumbSize}px,1fr))`,gap:8,alignContent:"start",border:bdr,position:"relative",userSelect:"none"}}>
-      {assets.map((a,i)=>{
-        const isSelected = multiSelected ? multiSelected.has(a.id) : selected===a.id;
-        return (
+    <div onDragOver={onDO} onDragLeave={onDL} onDrop={onDrop}
+      style={{flex:1,overflowY:"auto",padding:10,display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(${thumbSize}px,1fr))`,gap:8,alignContent:"start",border:dragOver?`2px dashed ${C.green}`:"2px solid transparent",position:"relative"}}>
+      {assets.map((a,i)=>(
         <div key={a.id}
-          onClick={(e)=>handleAssetClick(e,a)}
+          onClick={(e)=>handleClick(e,a)}
           draggable={!!a.file_path}
-          onDragStart={(e)=>{e.dataTransfer.setData('text/plain',a.file_path||'');e.dataTransfer.effectAllowed='copy';handleMultiDragStart(e,a);}}
-          style={{cursor:a.file_path?"grab":"default",border:`2px solid ${isSelected?C.green:C.borderMed}`,background:isSelected?C.bgActive:C.bgSurface,overflow:"hidden",fontFamily:"monospace",userSelect:"none",outline:isSelected?`1px solid ${C.greenDim}`:"none"}}>
+          onDragStart={(e)=>{e.dataTransfer.setData('text/plain',a.file_path||'');e.dataTransfer.effectAllowed='copy';onStartDrag(a);}}
+          style={{cursor:a.file_path?"grab":"default",border:`2px solid ${isSelected(a.id)?C.green:C.borderMed}`,background:isSelected(a.id)?C.bgActive:C.bgSurface,overflow:"hidden",fontFamily:"monospace",userSelect:"none"}}>
           <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:4,background:C.bgBase,position:"relative"}}>
             <AssetThumb asset={a} size={Math.max(thumbSize-16,44)}/>
             <span style={{position:"absolute",top:4,left:6,fontSize:8,color:C.greenMuted}}>{String(i+1).padStart(3,"0")}</span>
-            {isSelected&&isMulti&&<span style={{position:"absolute",top:4,right:6,fontSize:10,color:C.green}}>✓</span>}
+            {isSelected(a.id)&&hasMulti&&<span style={{position:"absolute",top:4,right:6,fontSize:10,color:C.green}}>✓</span>}
           </div>
           <div style={{padding:"3px 5px",borderTop:`1px solid ${C.border}`}}>
-            <div style={{fontSize:9,color:isSelected?C.green:C.white,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.title}</div>
+            <div style={{fontSize:9,color:isSelected(a.id)?C.green:C.white,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.title}</div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:1}}>
               <span style={{fontSize:8,color:C.greenDim}}>{a.type.toUpperCase()}</span>
               <span style={{fontSize:8,color:STATE_COLOR[a.state]||C.greenMuted,fontWeight:700}}>{(a.state||"raw").toUpperCase()}</span>
             </div>
           </div>
         </div>
-        );
-      })}
-      {isMulti&&(
+      ))}
+      {hasMulti&&(
         <div style={{position:"sticky",bottom:0,gridColumn:"1 / -1",background:C.bgSurface,border:`1px solid ${C.borderMed}`,padding:"6px 12px",display:"flex",alignItems:"center",gap:10,fontFamily:"monospace",fontSize:9}}>
           <span style={{color:C.green}}>{multiSelected.size} SELECTED</span>
           <span style={{color:C.greenMuted}}>·</span>
