@@ -177,6 +177,10 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
   );
 };
 
+const tbtn = () => ({background:"transparent",border:"none",color:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"3px 6px",cursor:"pointer",letterSpacing:1});
+const tbtnActive = () => ({background:C.bgActive,border:`1px solid ${C.borderBright}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"3px 6px",cursor:"pointer",letterSpacing:1});
+const tbtnGreen = () => ({background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"3px 8px",cursor:"pointer",letterSpacing:1});
+
 // ── TOOLBAR ────────────────────────────────────────────────────────────────
 const Toolbar = ({path,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode,search,setSearch,onImport}) => (
   <div style={{height:36,background:C.bgSurface,borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:6,padding:"0 10px",flexShrink:0,fontFamily:"monospace"}}>
