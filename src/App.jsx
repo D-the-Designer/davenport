@@ -66,7 +66,9 @@ const AssetThumb = ({ asset, size=80 }) => {
     return (
       <div style={{width:s,height:s,position:"relative",overflow:"hidden",background:C.bgElevated,border:`1px solid ${C.borderMed}`}}>
         <div style={SCAN}/>
-        <img src={`file://${asset.thumb_path}`} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} onError={e=>{e.target.style.display='none';}}/>
+        <img src={asset.thumb_path ? `file://${asset.thumb_path.replace(/\\/g,'/')}` : ''} alt="" 
+             style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} 
+             onError={e=>{e.target.style.display='none';}}/>
       </div>
     );
   }
@@ -719,7 +721,20 @@ export default function App() {
 
   useEffect(()=>{
     if (!activeContainerId||assetMap[activeContainerId]) return;
-    api.getAssets(activeContainerId).then(a=>setAssetMap(m=>({...m,[activeContainerId]:a})));
+    api.getAssets(activeContainerId).then(async a=>{
+      setAssetMap(m=>({...m,[activeContainerId]:a}));
+      // Auto-regenerate thumbnails for assets missing them
+      const needsThumbs = a.filter(x=>['image','vector'].includes(x.type)&&!x.thumb_path);
+      if (needsThumbs.length > 0) {
+        console.log(`[THUMB] ${needsThumbs.length} assets need thumbnails, regenerating...`);
+        const count = await api.regenThumbnails({containerId:activeContainerId});
+        if (count > 0) {
+          // Reload assets to get updated thumb paths
+          const updated = await api.getAssets(activeContainerId);
+          setAssetMap(m=>({...m,[activeContainerId]:updated}));
+        }
+      }
+    });
   },[activeContainerId]);
 
   const activeProject   = projects.find(p=>p.id===activeProjectId)||null;
