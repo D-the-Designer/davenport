@@ -21,5 +21,10 @@ contextBridge.exposeInMainWorld('dockyard', {
   regenThumbnails:     (d)    => ipcRenderer.invoke('regen-thumbnails', d),
   readThumb:           (fp)   => ipcRenderer.invoke('read-thumb', fp),
   importDockPackage:   (d)    => ipcRenderer.invoke('import-dock-package', d),
+  checkSnap:           ()     => ipcRenderer.invoke('check-snap'),
+  doSnap:              (d)    => ipcRenderer.invoke('do-snap', d),
+  doUndock:            ()     => ipcRenderer.invoke('do-undock'),
+  getDockState:        ()     => ipcRenderer.invoke('get-dock-state'),
+  getWindowBounds:     ()     => ipcRenderer.invoke('get-window-bounds'),
   regenerateThumbnails:(d)    => ipcRenderer.invoke('regenerate-thumbnails', d),
 });
