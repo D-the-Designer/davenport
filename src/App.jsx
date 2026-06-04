@@ -504,7 +504,6 @@ const Inspector = ({asset,onUpdate,onDelete,onOpen,onStartDrag}) => {
               </div>
             </div>
             <div style={{display:"flex",gap:4,marginTop:4}}>
-              {asset.file_path&&<button draggable onDragStart={(e)=>{e.dataTransfer.setData('text/plain',asset.file_path);e.dataTransfer.effectAllowed='copy';onStartDrag(asset);}} onClick={()=>onStartDrag(asset)} style={inspBtn(C.green)} title="Drag this file into Finder, Gmail, or any app">[ DRAG OUT ]</button>}
               {asset.file_path&&<button onClick={()=>onOpen(asset.file_path)} style={inspBtn(C.greenDim)}>[ OPEN ]</button>}
             </div>
             <button onClick={()=>onDelete(asset.id)} style={{background:"transparent",border:`1px solid #3A1515`,color:"#8A3030",fontSize:8,fontFamily:"monospace",padding:"4px 0",cursor:"pointer",letterSpacing:1}}>[ DELETE ]</button>
@@ -814,15 +813,28 @@ export default function App() {
     notify(`IMPORTED ${imported.length} FILE${imported.length>1?"S":""}`);
   },[activeContainerId,activeContainer,activeProjectId]);
 
+  const multiSelectedRef = useRef(new Set());
+  const assetMapRef = useRef({});
+  const activeContainerIdRef = useRef(null);
+
+  // Keep refs in sync so handleStartDrag always has current values
+  useEffect(()=>{ multiSelectedRef.current = multiSelected; }, [multiSelected]);
+  useEffect(()=>{ assetMapRef.current = assetMap; }, [assetMap]);
+  useEffect(()=>{ activeContainerIdRef.current = activeContainerId; }, [activeContainerId]);
+
   const handleStartDrag = useCallback((asset)=>{
     if (!asset.file_path) return;
-    // If multiple files selected, drag them all
-    if (multiSelected && multiSelected.size > 1) {
-      const allAssets = assetMap[activeContainerId] || [];
+    const ms = multiSelectedRef.current;
+    const am = assetMapRef.current;
+    const cid = activeContainerIdRef.current;
+    // Multi-file drag
+    if (ms && ms.size > 1) {
+      const allAssets = am[cid] || [];
       const selectedPaths = allAssets
-        .filter(a => multiSelected.has(a.id) && a.file_path)
+        .filter(a => ms.has(a.id) && a.file_path)
         .map(a => a.file_path);
       if (selectedPaths.length > 1) {
+        console.log('[DRAG] Multi-drag', selectedPaths.length, 'files');
         api.startDrag({
           filePath: asset.file_path,
           thumbPath: asset.thumb_path || '',
@@ -833,7 +845,7 @@ export default function App() {
     }
     // Single file drag
     api.startDrag({filePath: asset.file_path, thumbPath: asset.thumb_path || ''});
-  },[multiSelected, assetMap, activeContainerId]);
+  },[]);
 
   const makeDragHandlers = (asset) => ({
     draggable: !!asset.file_path,
