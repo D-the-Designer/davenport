@@ -232,29 +232,35 @@ ipcMain.handle('import-dropped-files', async (_, { filePaths, containerId, proje
   return imported;
 });
 
-ipcMain.on('start-drag', (event, { filePath, thumbPath }) => {
+ipcMain.on('start-drag', (event, { filePath, thumbPath, filePaths }) => {
   try {
-    if (!filePath || !fs.existsSync(filePath)) {
-      console.warn('[DRAG] File not found:', filePath);
-      return;
-    }
     const { nativeImage } = require('electron');
+
+    // Build icon from thumb or first file
     let icon;
     try {
       const iconPath = (thumbPath && fs.existsSync(thumbPath)) ? thumbPath : filePath;
       icon = nativeImage.createFromPath(iconPath);
-      if (icon.isEmpty()) {
-        icon = nativeImage.createFromPath(filePath);
-      }
-      if (icon.isEmpty()) {
-        // Create a small placeholder icon
-        icon = nativeImage.createEmpty();
-      }
+      if (icon.isEmpty()) icon = nativeImage.createEmpty();
     } catch(e) {
       icon = nativeImage.createEmpty();
     }
-    console.log('[DRAG] Starting drag for:', filePath);
-    event.sender.startDragging({ file: filePath, icon });
+
+    // Multi-file drag
+    if (filePaths && filePaths.length > 1) {
+      const validPaths = filePaths.filter(p => p && fs.existsSync(p));
+      if (validPaths.length === 0) return;
+      console.log('[DRAG] Multi-drag:', validPaths.length, 'files');
+      event.sender.startDragging({ files: validPaths, icon });
+    } else {
+      // Single file drag
+      if (!filePath || !fs.existsSync(filePath)) {
+        console.warn('[DRAG] File not found:', filePath);
+        return;
+      }
+      console.log('[DRAG] Single drag:', filePath);
+      event.sender.startDragging({ file: filePath, icon });
+    }
   } catch(e) {
     console.error('[DRAG] Error:', e.message);
   }
