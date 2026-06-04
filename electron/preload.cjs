@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('dockyard', {
   toggleAlwaysOnTop:   ()     => ipcRenderer.invoke('toggle-always-on-top'),
   exportContainer:     (d)    => ipcRenderer.invoke('export-container', d),
   regenThumbnails:     (d)    => ipcRenderer.invoke('regen-thumbnails', d),
+  readThumb:           (fp)   => ipcRenderer.invoke('read-thumb', fp),
   importDockPackage:   (d)    => ipcRenderer.invoke('import-dock-package', d),
   regenerateThumbnails:(d)    => ipcRenderer.invoke('regenerate-thumbnails', d),
 });
