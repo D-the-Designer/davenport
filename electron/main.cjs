@@ -160,7 +160,15 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Register custom protocol for serving local files (thumbnails, assets)
+  const { protocol } = require('electron');
+  protocol.registerFileProtocol('dockyard', (request, callback) => {
+    const filePath = decodeURIComponent(request.url.replace('dockyard://', ''));
+    callback({ path: filePath });
+  });
+  createWindow();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
