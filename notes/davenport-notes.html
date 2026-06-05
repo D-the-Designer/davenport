@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Davenport Notes</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green:     #4AFC6A;
+  --green-dim: #2A8C42;
+  --green-lo:  #1A4A22;
+  --green-bg:  #0D1A0F;
+  --black:     #080C09;
+  --black-2:   #0B100C;
+  --black-3:   #101610;
+  --amber:     #D4A832;
+  --mono: 'Share Tech Mono', 'Courier New', monospace;
+  --snap-dist: 18;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--black);
+  font-family: var(--mono);
+  overflow: hidden;
+  user-select: none;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.16) 2px, rgba(0,0,0,0.16) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+#desktop {
+  position: relative;
+  width: 100%; height: 100%;
+  overflow: hidden;
+}
+
+#spawn-btn {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: var(--black-2);
+  border: 1px solid var(--green-dim);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  padding: 7px 18px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.1s, border-color 0.1s;
+}
+#spawn-btn:hover { background: var(--green-lo); border-color: var(--green); }
+#spawn-btn:active { background: var(--green-dim); }
+
+/* ── PANE ── */
+.pane {
+  position: absolute;
+  min-width: 220px;
+  min-height: 180px;
+  background: var(--black-2);
+  border: 1px solid var(--green-dim);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.pane.focused { border-color: var(--green); z-index: 20; }
+.pane.docked  { box-shadow: 0 0 0 1px var(--green-lo); }
+
+.pane-titlebar {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  background: var(--black-3);
+  border-bottom: 1px solid var(--green-dim);
+  padding: 0 8px;
+  cursor: grab;
+  flex-shrink: 0;
+  gap: 6px;
+}
+.pane-titlebar:active { cursor: grabbing; }
+
+.pane-id {
+  font-size: 9px;
+  color: var(--green-lo);
+  letter-spacing: 0.12em;
+  flex-shrink: 0;
+}
+.pane-name {
+  flex: 1;
+  font-size: 10px;
+  color: var(--green);
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+.pane-btns { display: flex; gap: 3px; flex-shrink: 0; }
+
+.pbtn {
+  height: 17px;
+  padding: 0 6px;
+  background: none;
+  border: 1px solid var(--green-lo);
+  color: var(--green-dim);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.1s;
+  line-height: 1;
+}
+.pbtn:hover            { border-color: var(--green); color: var(--green); background: var(--green-lo); }
+.pbtn.close:hover      { border-color: var(--amber); color: var(--amber); background: rgba(212,168,50,0.08); }
+.pbtn.flash            { border-color: var(--green) !important; color: var(--green) !important; background: var(--green-lo) !important; }
+
+.pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 6px;
+  background: var(--black);
+  border-bottom: 1px solid var(--green-lo);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.tb {
+  height: 19px;
+  padding: 0 5px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--green-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.tb:hover { border-color: var(--green-lo); color: var(--green); background: rgba(26,74,34,0.5); }
+.tb-sep { width: 1px; height: 13px; background: var(--green-lo); margin: 0 2px; flex-shrink: 0; }
+
+.note-title {
+  width: 100%;
+  background: var(--black);
+  border: none;
+  border-bottom: 1px solid var(--green-lo);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  padding: 5px 8px;
+  outline: none;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  caret-color: var(--green);
+}
+.note-title::placeholder { color: var(--green-lo); }
+
+.note-content {
+  flex: 1;
+  background: var(--black-2);
+  border: none;
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.75;
+  padding: 10px;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  caret-color: var(--green);
+  scrollbar-width: thin;
+  scrollbar-color: var(--green-lo) transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+.note-content::placeholder { color: var(--green-lo); }
+.note-content::-webkit-scrollbar { width: 4px; }
+.note-content::-webkit-scrollbar-thumb { background: var(--green-lo); }
+
+.pane-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 19px;
+  padding: 0 8px;
+  background: var(--black-3);
+  border-top: 1px solid var(--green-lo);
+  flex-shrink: 0;
+}
+.pane-status span { font-size: 8px; color: var(--green-dim); letter-spacing: 0.1em; }
+.pane-status .st-flex { flex: 1; }
+.pane-status .st-saved { color: var(--green); }
+.pane-status .st-amber { color: var(--amber); }
+
+.resize-h {
+  position: absolute;
+  right: 0; bottom: 0;
+  width: 14px; height: 14px;
+  cursor: se-resize;
+  z-index: 5;
+}
+.resize-h::after {
+  content: '';
+  position: absolute;
+  right: 3px; bottom: 3px;
+  width: 6px; height: 6px;
+  border-right: 1px solid var(--green-dim);
+  border-bottom: 1px solid var(--green-dim);
+}
+
+#snap-ghost {
+  position: absolute;
+  pointer-events: none;
+  border: 1px dashed var(--green-dim);
+  background: rgba(74,252,106,0.025);
+  display: none;
+  z-index: 5;
+  transition: left 0.05s, top 0.05s;
+}
+</style>
+</head>
+<body>
+<div id="desktop">
+  <div id="snap-ghost"></div>
+</div>
+<button id="spawn-btn" onclick="spawnPane()">[ + NEW NOTE ]</button>
+
+<script>
+const SNAP  = 18;
+const STORE = 'dvp_notes_v2';
+
+let panes  = [];
+let groups = [];
+let pCount = 0;
+let drag   = null;
+const ghost = document.getElementById('snap-ghost');
+const desk  = document.getElementById('desktop');
+
+// ── UTILS ──
+function getPane(id) { return panes.find(p => p.id === id) || null; }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function getGroup(id) { return groups.find(g => g.includes(id)) || null; }
+function deskSize() { return { w: desk.offsetWidth, h: desk.offsetHeight }; }
+
+// ── PERSIST ──
+function persist() {
+  const data = panes.map(p => ({
+    id: p.id,
+    x: p.x, y: p.y, w: p.w, h: p.h,
+    title: p.el.querySelector('.note-title').value,
+    content: p.el.querySelector('.note-content').value
+  }));
+  try { localStorage.setItem(STORE, JSON.stringify(data)); } catch(e) {}
+}
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORE);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !data.length) return false;
+    data.forEach(d => buildPane(d.x, d.y, d.w, d.h, d.title, d.content, d.id));
+    return true;
+  } catch(e) { return false; }
+}
+
+// ── SPAWN ──
+function spawnPane(x, y, w, h, title, content, forceId) {
+  pCount++;
+  const ds = deskSize();
+  w = w || 340;
+  h = h || 380;
+  x = (x !== undefined) ? x : Math.min(ds.w - w - 20, 60 + (pCount-1)*28);
+  y = (y !== undefined) ? y : Math.min(ds.h - h - 60, 60 + (pCount-1)*28);
+  return buildPane(x, y, w, h, title, content, forceId);
+}
+
+function buildPane(x, y, w, h, title, content, forceId) {
+  pCount++;
+  const id  = forceId || ('N' + String(pCount).padStart(2,'0'));
+  const el  = document.createElement('div');
+  el.className  = 'pane focused';
+  el.dataset.id = id;
+  el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;`;
+
+  el.innerHTML = `
+<div class="pane-titlebar" data-titlebar="${id}">
+  <span class="pane-id">${id}</span>
+  <span class="pane-name">${esc((title||'UNTITLED').toUpperCase())}</span>
+  <div class="pane-btns">
+    <button class="pbtn copy"  onclick="copyPane('${id}')">COPY</button>
+    <button class="pbtn save"  onclick="savePane('${id}')">SAVE</button>
+    <button class="pbtn close" onclick="closePane('${id}')">&#x2715;</button>
+  </div>
+</div>
+<div class="pane-toolbar">
+  <button class="tb" onclick="fmt('${id}','**','**')">**B**</button>
+  <button class="tb" onclick="fmt('${id}','_','_')">_I_</button>
+  <div class="tb-sep"></div>
+  <button class="tb" onclick="fmtLine('${id}','# ')">H1</button>
+  <button class="tb" onclick="fmtLine('${id}','## ')">H2</button>
+  <div class="tb-sep"></div>
+  <button class="tb" onclick="fmtLine('${id}','- ')">LIST</button>
+  <button class="tb" onclick="fmtLine('${id}','&gt; ')">QT</button>
+  <button class="tb" onclick="fmt('${id}','&#96;','&#96;')">{&nbsp;}</button>
+  <div class="tb-sep"></div>
+  <button class="tb" onclick="clearPane('${id}')">CLR</button>
+</div>
+<input class="note-title" type="text" placeholder="NOTE TITLE_" value="${esc((title||'').toUpperCase())}" spellcheck="false">
+<textarea class="note-content" placeholder="START WRITING_&#10;&#10;CTRL+ENTER  COPY ALL">${esc(content||'')}</textarea>
+<div class="pane-status">
+  <span class="st-words">0 WDS</span>
+  <span class="st-chars">0 CHR</span>
+  <span class="st-flex"></span>
+  <span class="st-save"></span>
+</div>
+<div class="resize-h" data-resize="${id}"></div>`;
+
+  desk.appendChild(el);
+
+  const pane = { id, el, x, y, w: w||340, h: h||380 };
+  panes.push(pane);
+
+  // titlebar drag
+  el.querySelector('[data-titlebar]').addEventListener('mousedown', e => {
+    if (e.target.closest('button')) return;
+    focusPane(id);
+    const grp = getGroup(id);
+    const members = grp ? panes.filter(p => grp.includes(p.id)) : [pane];
+    members.forEach(p => { p._ox = p.x; p._oy = p.y; });
+    drag = { type:'move', id, mx0: e.clientX, my0: e.clientY, members };
+    e.preventDefault();
+  });
+
+  // resize
+  el.querySelector('[data-resize]').addEventListener('mousedown', e => {
+    focusPane(id);
+    drag = { type:'resize', id, mx0: e.clientX, my0: e.clientY, w0: pane.w, h0: pane.h };
+    e.preventDefault();
+  });
+
+  el.addEventListener('mousedown', () => focusPane(id), true);
+
+  // title sync
+  el.querySelector('.note-title').addEventListener('input', () => {
+    const v = el.querySelector('.note-title').value.toUpperCase();
+    el.querySelector('.pane-name').textContent = v || 'UNTITLED';
+    persist();
+  });
+
+  el.querySelector('.note-content').addEventListener('input', () => {
+    updateStats(id); persist();
+  });
+
+  el.querySelector('.note-content').addEventListener('keydown', e => {
+    if ((e.ctrlKey||e.metaKey) && e.key === 'Enter') { e.preventDefault(); copyPane(id); }
+  });
+
+  updateStats(id);
+  focusPane(id);
+  persist();
+  return pane;
+}
+
+// ── FOCUS / Z ──
+function focusPane(id) {
+  panes.forEach(p => p.el.classList.remove('focused'));
+  const p = getPane(id);
+  if (!p) return;
+  p.el.classList.add('focused');
+  const grp = getGroup(id);
+  const members = grp ? panes.filter(pp => grp.includes(pp.id)) : [p];
+  let maxZ = 10;
+  panes.forEach(pp => { if (!members.includes(pp)) { const z = parseInt(pp.el.style.zIndex)||10; if(z>maxZ) maxZ=z; }});
+  members.forEach((pp,i) => { pp.el.style.zIndex = maxZ + 1 + i; });
+}
+
+// ── MOUSE ──
+document.addEventListener('mousemove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.mx0;
+  const dy = e.clientY - drag.my0;
+
+  if (drag.type === 'move') {
+    drag.members.forEach(p => {
+      p.el.style.left = (p._ox + dx) + 'px';
+      p.el.style.top  = (p._oy + dy) + 'px';
+    });
+    const lead = getPane(drag.id);
+    const nx = lead._ox + dx, ny = lead._oy + dy;
+    const snap = findSnap(lead, nx, ny);
+    if (snap) {
+      ghost.style.cssText = `display:block;left:${snap.gx}px;top:${snap.gy}px;width:${lead.w}px;height:${lead.h}px;`;
+    } else {
+      ghost.style.display = 'none';
+    }
+
+  } else if (drag.type === 'resize') {
+    const p = getPane(drag.id);
+    if (!p) return;
+    p.w = Math.max(220, drag.w0 + dx);
+    p.h = Math.max(180, drag.h0 + dy);
+    p.el.style.width  = p.w + 'px';
+    p.el.style.height = p.h + 'px';
+    persist();
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (!drag) return;
+  if (drag.type === 'move') {
+    drag.members.forEach(p => {
+      p.x = parseInt(p.el.style.left);
+      p.y = parseInt(p.el.style.top);
+    });
+    ghost.style.display = 'none';
+    const lead = getPane(drag.id);
+    if (lead) {
+      const snap = findSnap(lead, lead.x, lead.y);
+      if (snap) doSnap(lead, snap);
+    }
+  }
+  drag = null;
+  persist();
+});
+
+// ── SNAP ──
+function findSnap(moving, nx, ny) {
+  const mw = moving.w, mh = moving.h;
+  const movingGrp = getGroup(moving.id);
+
+  for (const other of panes) {
+    if (other.id === moving.id) continue;
+    if (movingGrp && movingGrp.includes(other.id)) continue;
+    const ox = other.x, oy = other.y, ow = other.w, oh = other.h;
+
+    if (Math.abs(nx - (ox+ow)) < SNAP && overlapY(ny, mh, oy, oh))
+      return { tid: other.id, gx: ox+ow, gy: oy };
+    if (Math.abs((nx+mw) - ox) < SNAP && overlapY(ny, mh, oy, oh))
+      return { tid: other.id, gx: ox-mw, gy: oy };
+    if (Math.abs(ny - (oy+oh)) < SNAP && overlapX(nx, mw, ox, ow))
+      return { tid: other.id, gx: ox, gy: oy+oh };
+    if (Math.abs((ny+mh) - oy) < SNAP && overlapX(nx, mw, ox, ow))
+      return { tid: other.id, gx: ox, gy: oy-mh };
+  }
+  return null;
+}
+
+function overlapY(ay, ah, by, bh) { return ay < by+bh && ay+ah > by; }
+function overlapX(ax, aw, bx, bw) { return ax < bx+bw && ax+aw > bx; }
+
+function doSnap(moving, snap) {
+  moving.x = snap.gx; moving.y = snap.gy;
+  moving.el.style.left = snap.gx + 'px';
+  moving.el.style.top  = snap.gy + 'px';
+
+  const gA = getGroup(moving.id);
+  const gB = getGroup(snap.tid);
+
+  if (gA && gB) {
+    const merged = [...new Set([...gA, ...gB])];
+    groups = groups.filter(g => g !== gA && g !== gB);
+    groups.push(merged);
+  } else if (gA) {
+    gA.push(snap.tid);
+  } else if (gB) {
+    gB.push(moving.id);
+  } else {
+    groups.push([moving.id, snap.tid]);
+  }
+
+  refreshDockStyles();
+  persist();
+}
+
+function refreshDockStyles() {
+  panes.forEach(p => p.el.classList.remove('docked'));
+  groups.forEach(g => {
+    if (g.length > 1) g.forEach(id => { const p = getPane(id); if(p) p.el.classList.add('docked'); });
+  });
+}
+
+// ── CLOSE ──
+function closePane(id) {
+  const p = getPane(id);
+  if (!p) return;
+  groups = groups.map(g => g.filter(gid => gid !== id)).filter(g => g.length > 1);
+  p.el.remove();
+  panes = panes.filter(pp => pp.id !== id);
+  refreshDockStyles();
+  persist();
+}
+
+// ── SAVE (simulate Files write) ──
+function savePane(id) {
+  const p = getPane(id);
+  if (!p) return;
+  const title   = p.el.querySelector('.note-title').value.trim() || 'UNTITLED';
+  const content = p.el.querySelector('.note-content').value;
+  const fname   = title.replace(/\s+/g,'_').replace(/[^A-Z0-9_\-]/gi,'').toUpperCase() + '.txt';
+  const blob    = new Blob([content], { type: 'text/plain' });
+  const a       = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: fname });
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const st = p.el.querySelector('.st-save');
+  st.textContent = 'SAVED \u2192 FILES/';
+  st.className   = 'st-save st-saved';
+  setTimeout(() => { st.textContent=''; st.className='st-save'; }, 2500);
+  persist();
+}
+
+// ── COPY ──
+function copyPane(id) {
+  const p = getPane(id);
+  if (!p) return;
+  const text = p.el.querySelector('.note-content').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = p.el.querySelector('.pbtn.copy');
+    btn.textContent = 'COPIED';
+    btn.classList.add('flash');
+    setTimeout(() => { btn.textContent='COPY'; btn.classList.remove('flash'); }, 1600);
+  });
+}
+
+// ── FORMAT ──
+function fmt(id, before, after) {
+  const p = getPane(id); if (!p) return;
+  const ta = p.el.querySelector('.note-content');
+  ta.focus();
+  const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+  if (s === e) {
+    const ins = before + 'TEXT' + after;
+    ta.value = v.slice(0,s) + ins + v.slice(s);
+    ta.selectionStart = s + before.length;
+    ta.selectionEnd   = s + before.length + 4;
+  } else {
+    ta.value = v.slice(0,s) + before + v.slice(s,e) + after + v.slice(e);
+    ta.selectionStart = s + before.length;
+    ta.selectionEnd   = e + before.length;
+  }
+  updateStats(id); persist();
+}
+
+function fmtLine(id, prefix) {
+  const p = getPane(id); if (!p) return;
+  const ta = p.el.querySelector('.note-content');
+  ta.focus();
+  const s = ta.selectionStart, v = ta.value;
+  const ls = v.lastIndexOf('\n', s-1) + 1;
+  ta.value = v.slice(0,ls) + prefix + v.slice(ls);
+  ta.selectionStart = ta.selectionEnd = s + prefix.length;
+  updateStats(id); persist();
+}
+
+function clearPane(id) {
+  const p = getPane(id); if (!p) return;
+  if (!window.confirm('CLEAR THIS NOTE?')) return;
+  p.el.querySelector('.note-content').value = '';
+  updateStats(id); persist();
+}
+
+// ── STATS ──
+function updateStats(id) {
+  const p = getPane(id); if (!p) return;
+  const txt   = p.el.querySelector('.note-content').value;
+  const words = txt.trim() ? txt.trim().split(/\s+/).length : 0;
+  p.el.querySelector('.st-words').textContent = words + ' WDS';
+  p.el.querySelector('.st-chars').textContent = txt.length + ' CHR';
+}
+
+// ── INIT ──
+if (!loadSaved()) {
+  spawnPane(60, 60, 360, 400, 'WELCOME',
+`DAVENPORT NOTES  //  v0.1
+PART OF THE DAVENPORT TRIO SUITE
+
+─────────────────────────────────
+
+EACH NOTE IS ITS OWN FLOATING PANE.
+
+DRAG TITLE BAR   →  MOVE PANE
+DRAG NEAR OTHER  →  SNAP + DOCK
+DOCKED PANES MOVE AS ONE UNIT
+
+RESIZE FROM BOTTOM-RIGHT CORNER.
+
+─────────────────────────────────
+
+CTRL+ENTER       →  COPY TO CLIPBOARD
+SAVE             →  WRITE TO FILES DIR
+[ + NEW NOTE ]   →  SPAWN FRESH PANE`);
+}
+</script>
+</body>
+</html>
