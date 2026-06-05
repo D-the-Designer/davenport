@@ -1,5 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
-contextBridge.exposeInMainWorld('dockyard', {
+contextBridge.exposeInMainWorld('davenport-files', {
   getProjects:         ()     => ipcRenderer.invoke('get-projects'),
   upsertProject:       (p)    => ipcRenderer.invoke('upsert-project', p),
   deleteProject:       (id)   => ipcRenderer.invoke('delete-project', id),
