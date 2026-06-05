@@ -1,5 +1,5 @@
 {
-  "name": "dockyard",
+  "name": "davenport-files",
   "version": "0.2.0",
   "description": "Local-first asset manager for every program, every file type, every workflow.",
   "author": "D the Designer",
@@ -31,8 +31,8 @@
     "cross-env": "^7.0.3"
   },
   "build": {
-    "appId": "com.dockyard.app",
-    "productName": "Dockyard",
+    "appId": "com.davenport-files.app",
+    "productName": "Davenport Files",
     "directories": { "output": "dist-electron" },
     "files": ["dist/**/*", "electron/**/*", "package.json"],
     "asar": true,
