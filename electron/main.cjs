@@ -144,28 +144,15 @@ let notesWindow = null;
 let alwaysOnTop = false;
 
 function openNotesWindow() {
-  if (notesWindow && !notesWindow.isDestroyed()) {
-    notesWindow.focus();
-    return;
-  }
-  notesWindow = new BrowserWindow({
-    width: 420, height: 520,
-    minWidth: 220, minHeight: 180,
-    backgroundColor: '#080C09',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 10, y: 10 },
-    title: 'Davenport Notes',
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      webSecurity: false,
-    },
-    show: false,
+  const { spawn } = require('child_process');
+  const electronBin = process.execPath;
+  const notesMain   = path.join(__dirname, 'notes-main.cjs');
+  const child = spawn(electronBin, [notesMain], {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env }
   });
-  const notesPath = path.join(__dirname, '../notes/davenport-notes.html');
-  notesWindow.loadFile(notesPath);
-  notesWindow.once('ready-to-show', () => notesWindow.show());
-  notesWindow.on('closed', () => { notesWindow = null; });
+  child.unref();
 }
 
 function createWindow() {
