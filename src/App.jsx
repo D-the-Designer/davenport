@@ -1056,7 +1056,7 @@ export default function App() {
   const handleExport=async()=>{
     if (!activeContainer) return;
     const ok=await api.exportContainer({container:activeContainer,assets:rawAssets,project:activeProject});
-    if (ok) notify("EXPORTED AS .DAVENPORT FILES.ZIP");
+    if (ok) notify("EXPORTED AS .DOCK.ZIP");
   };
 
   useEffect(()=>{
