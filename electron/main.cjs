@@ -188,6 +188,8 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
+ipcMain.handle('open-notes-window', () => { openNotesWindow(); });
+
 ipcMain.handle('get-projects', () => getProjects());
 ipcMain.handle('upsert-project', (_, p) => {
   run(`INSERT OR REPLACE INTO projects(id,name,description,client,scope,deliverables,deadline,status,notes,created_at,updated_at)
