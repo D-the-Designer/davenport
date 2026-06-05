@@ -31,7 +31,7 @@
     "cross-env": "^7.0.3"
   },
   "build": {
-    "appId": "com.davenport-files.app",
+    "appId": "com.davenport.files",
     "productName": "Davenport Files",
     "directories": { "output": "dist-electron" },
     "files": ["dist/**/*", "electron/**/*", "package.json"],
