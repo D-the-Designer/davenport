@@ -147,7 +147,7 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
           <span>{narrow?"FULL":"NARROW"}</span>
         </button>
         {/* Notes launcher */}
-        <button onClick={()=>window.davenport-files?.openNotes()}
+        <button onClick={()=>window.dockyard?.openNotes()}
           title="Open Davenport Notes"
           style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.greenDim,fontSize:10,fontFamily:"monospace",padding:"3px 10px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:5}}>
           <span>NOTES</span>
@@ -199,7 +199,7 @@ const Toolbar = ({path,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode
     {/* Primary actions */}
     <button onClick={onAddFolder} style={tbtnGreen()} title="Add folder">+ ADD FOLDER</button>
     <div style={{width:1,height:16,background:C.border}}/>
-    <button onClick={onNotes} style={tbtn()} title="View/edit folder notes">NOTES</button>
+    <button onClick={()=>window.dockyard?.openNotes()} style={tbtn()} title="Open Davenport Notes">NOTES</button>
     <div style={{width:1,height:16,background:C.border}}/>
     {/* Search */}
     <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="SEARCH_"
