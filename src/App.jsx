@@ -28,7 +28,7 @@ const STATE_OPTS  = ["raw","working","approved","final"];
 const STATE_COLOR = { raw:C.greenMuted, working:C.greenDim, approved:C.green, final:C.amber };
 const ICON = { image:"▣",vector:"⬡",audio:"◈",video:"▶",font:"Ag",color:"●",prompt:"✦",document:"≡",code:"</>",lut:"▨",other:"○" };
 
-const api = window.dockyard || {
+const api = window.davenport-files || {
   getProjects:()=>Promise.resolve([]), upsertProject:(p)=>Promise.resolve([p]),
   deleteProject:()=>Promise.resolve([]), getContainers:()=>Promise.resolve([]),
   upsertContainer:(c)=>Promise.resolve([c]), deleteContainer:()=>Promise.resolve([]),
@@ -36,7 +36,7 @@ const api = window.dockyard || {
   deleteAsset:()=>Promise.resolve(true), setAssetState:()=>Promise.resolve(true),
   importFilesDialog:()=>Promise.resolve([]), importDroppedFiles:()=>Promise.resolve([]),
   startDrag:()=>{}, openFile:()=>Promise.resolve(),
-  getDataDir:()=>Promise.resolve('~/Dockyard'), toggleAlwaysOnTop:()=>Promise.resolve(false),
+  getDataDir:()=>Promise.resolve('~/Davenport Files'), toggleAlwaysOnTop:()=>Promise.resolve(false),
   exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null), regenerateThumbnails:()=>Promise.resolve({count:0}),
   checkSnap:()=>Promise.resolve(null), doSnap:()=>Promise.resolve({success:false}),
   doUndock:()=>Promise.resolve(true), getDockState:()=>Promise.resolve({docked:false}),
@@ -130,11 +130,11 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
     <div style={{flexShrink:0,fontFamily:"monospace",WebkitAppRegion:"drag",position:"relative",zIndex:50}}>
       {/* Top strip — window controls */}
       <div style={{height:36,background:"#040904",borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",padding:"0 8px 0 80px",gap:6}}>
-        <span style={{color:C.green,fontSize:11,fontWeight:700,letterSpacing:3,marginRight:8,WebkitAppRegion:"no-drag"}}>DOCKYARD</span>
+        <span style={{color:C.green,fontSize:11,fontWeight:700,letterSpacing:3,marginRight:8,WebkitAppRegion:"no-drag"}}>DAVENPORT FILES</span>
         <div style={{width:1,height:14,background:C.borderMed}}/>
         {/* Pin button — prominent */}
         <button onClick={onToggleTop}
-          title={alwaysOnTop?"Unpin — allow other windows on top":"Pin — keep Dockyard above all windows"}
+          title={alwaysOnTop?"Unpin — allow other windows on top":"Pin — keep Davenport Files above all windows"}
           style={{background:alwaysOnTop?C.bgActive:"transparent",border:`1px solid ${alwaysOnTop?C.green:C.borderMed}`,color:alwaysOnTop?C.green:C.greenDim,fontSize:10,fontFamily:"monospace",padding:"3px 10px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:5}}>
           <span>{alwaysOnTop?"📌":"⬜"}</span>
           <span>{alwaysOnTop?"PINNED":"PIN"}</span>
@@ -147,7 +147,7 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
           <span>{narrow?"FULL":"NARROW"}</span>
         </button>
         {/* Notes launcher */}
-        <button onClick={()=>window.dockyard?.openNotes()}
+        <button onClick={()=>window.davenport-files?.openNotes()}
           title="Open Davenport Notes"
           style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.greenDim,fontSize:10,fontFamily:"monospace",padding:"3px 10px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:5}}>
           <span>NOTES</span>
@@ -569,7 +569,7 @@ const NarrowStrip = ({assets,containerName,onExpand,onStartDrag,onDropFiles,onSt
 
       {/* Header */}
       <div style={{padding:"6px 8px",borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:4,background:"#040904"}}>
-        <span style={{fontSize:8,color:C.green,letterSpacing:1,flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{containerName?.toUpperCase()||"DOCKYARD"}</span>
+        <span style={{fontSize:8,color:C.green,letterSpacing:1,flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{containerName?.toUpperCase()||"DAVENPORT FILES"}</span>
       </div>
       <button onClick={onExpand}
         style={{width:"100%",background:C.bgActive,border:"none",borderBottom:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"5px 0",cursor:"pointer",letterSpacing:2,textAlign:"center"}}>
@@ -621,7 +621,7 @@ const NarrowStrip = ({assets,containerName,onExpand,onStartDrag,onDropFiles,onSt
 const Welcome = ({onCreate}) => (
   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"monospace",padding:48}}>
     <div style={{fontSize:32,color:C.greenMuted,opacity:0.2}}>📂</div>
-    <div style={{fontSize:12,color:C.greenDim,letterSpacing:2}}>WELCOME TO DOCKYARD</div>
+    <div style={{fontSize:12,color:C.greenDim,letterSpacing:2}}>WELCOME TO DAVENPORT FILES</div>
     <div style={{fontSize:9,color:C.greenMuted,letterSpacing:1,textAlign:"center",maxWidth:320,lineHeight:2.2}}>
       YOUR LOCAL ASSET MANAGER.<br/>
       WORKS LIKE FINDER — STICKS TO ANY WINDOW.<br/>
@@ -784,7 +784,7 @@ export default function App() {
   // Check snap on demand — called when user stops moving window
   const checkSnap = useCallback(async()=>{
     if (snapState?.phase==='docked') return;
-    const api2 = window.dockyard;
+    const api2 = window.davenport-files;
     if (!api2?.checkSnap) return;
     const result = await api2.checkSnap();
     if (result) {
@@ -807,7 +807,7 @@ export default function App() {
 
   const handleSnap = async() => {
     if (!snapState?.snapData) return;
-    const result = await window.dockyard.doSnap(snapState.snapData);
+    const result = await window.davenport-files.doSnap(snapState.snapData);
     if (result?.success) {
       setSnapState({ edge: snapState.edge, appName: result.appName, phase: 'docked' });
       setNarrow(true);
@@ -816,7 +816,7 @@ export default function App() {
   };
 
   const handleUndock = async() => {
-    await window.dockyard?.doUndock?.();
+    await window.davenport-files?.doUndock?.();
     setSnapState(null);
     setNarrow(false);
     notify("UNDOCKED");
@@ -825,7 +825,7 @@ export default function App() {
   const handleSetNarrow = async (val) => {
     if (val) {
       // Save current size and shrink to narrow strip
-      if (window.dockyard?.getDataDir) {
+      if (window.davenport-files?.getDataDir) {
         // Use Electron to resize window
         try {
           const w = window.outerWidth;
@@ -1056,7 +1056,7 @@ export default function App() {
   const handleExport=async()=>{
     if (!activeContainer) return;
     const ok=await api.exportContainer({container:activeContainer,assets:rawAssets,project:activeProject});
-    if (ok) notify("EXPORTED AS .DOCKYARD.ZIP");
+    if (ok) notify("EXPORTED AS .DAVENPORT FILES.ZIP");
   };
 
   useEffect(()=>{
