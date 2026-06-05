@@ -140,7 +140,33 @@ async function importFile(filePath, containerId, projectId, containerName) {
 }
 
 let mainWindow;
+let notesWindow = null;
 let alwaysOnTop = false;
+
+function openNotesWindow() {
+  if (notesWindow && !notesWindow.isDestroyed()) {
+    notesWindow.focus();
+    return;
+  }
+  notesWindow = new BrowserWindow({
+    width: 420, height: 520,
+    minWidth: 220, minHeight: 180,
+    backgroundColor: '#080C09',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    trafficLightPosition: { x: 10, y: 10 },
+    title: 'Davenport Notes',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: false,
+    },
+    show: false,
+  });
+  const notesPath = path.join(__dirname, '../notes/davenport-notes.html');
+  notesWindow.loadFile(notesPath);
+  notesWindow.once('ready-to-show', () => notesWindow.show());
+  notesWindow.on('closed', () => { notesWindow = null; });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
