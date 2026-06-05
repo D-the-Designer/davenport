@@ -146,6 +146,12 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
           <span>{narrow?"◀▶":"▶◀"}</span>
           <span>{narrow?"FULL":"NARROW"}</span>
         </button>
+        {/* Notes launcher */}
+        <button onClick={()=>window.electronAPI?.invoke('open-notes-window')}
+          title="Open Davenport Notes"
+          style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.greenDim,fontSize:10,fontFamily:"monospace",padding:"3px 10px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:5}}>
+          <span>NOTES</span>
+        </button>
         <div style={{flex:1}}/>
         <span style={{fontSize:8,color:C.greenMuted,letterSpacing:1,WebkitAppRegion:"no-drag"}}>LOCAL ONLY</span>
       </div>
