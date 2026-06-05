@@ -8,22 +8,22 @@ nativeTheme.themeSource = 'dark';
 // Must be called before app is ready
 const { protocol } = require('electron');
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'dockyard', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } }
+  { scheme: 'davenport-files', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
-const DOCKYARD_DIR = path.join(os.homedir(), 'Dockyard');
-const ASSETS_DIR   = path.join(DOCKYARD_DIR, 'assets');
-const THUMBS_DIR   = path.join(DOCKYARD_DIR, 'thumbnails');
-const EXPORTS_DIR  = path.join(DOCKYARD_DIR, 'exports');
-[DOCKYARD_DIR, ASSETS_DIR, THUMBS_DIR, EXPORTS_DIR].forEach(d => {
+const DAVENPORT FILES_DIR = path.join(os.homedir(), 'Davenport Files');
+const ASSETS_DIR   = path.join(DAVENPORT FILES_DIR, 'assets');
+const THUMBS_DIR   = path.join(DAVENPORT FILES_DIR, 'thumbnails');
+const EXPORTS_DIR  = path.join(DAVENPORT FILES_DIR, 'exports');
+[DAVENPORT FILES_DIR, ASSETS_DIR, THUMBS_DIR, EXPORTS_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
 
 let db = null;
 try {
   const Database = require('better-sqlite3');
-  db = new Database(path.join(DOCKYARD_DIR, 'dockyard.db'));
+  db = new Database(path.join(DAVENPORT FILES_DIR, 'davenport-files.db'));
   db.pragma('journal_mode = WAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -199,9 +199,9 @@ function createWindow() {
 
 app.whenReady().then(() => {
   // Register file protocol for local thumbnails and assets
-  protocol.registerFileProtocol('dockyard', (request, callback) => {
+  protocol.registerFileProtocol('davenport-files', (request, callback) => {
     try {
-      const url = request.url.replace('dockyard://', '');
+      const url = request.url.replace('davenport-files://', '');
       const filePath = decodeURIComponent(url);
       callback({ path: filePath });
     } catch(e) {
@@ -328,7 +328,7 @@ ipcMain.handle('regen-thumbnails', async (_, { containerId }) => {
   console.log(`[THUMB] Regenerated ${count} thumbnails for container ${containerId}`);
   return count;
 });
-ipcMain.handle('get-data-dir', () => DOCKYARD_DIR);
+ipcMain.handle('get-data-dir', () => DAVENPORT FILES_DIR);
 ipcMain.handle('toggle-always-on-top', () => { alwaysOnTop=!alwaysOnTop; mainWindow.setAlwaysOnTop(alwaysOnTop,'floating'); return alwaysOnTop; });
 
 // ── SNAP TO DOCK ─────────────────────────────────────────────────────────
@@ -356,15 +356,15 @@ function getFrontmostWindowBounds() {
     const parts = result.split(',');
     if (parts.length < 5) return null;
     const [appName, x, y, w, h] = parts;
-    if (!appName || appName.trim() === 'Electron' || appName.trim() === 'dockyard') return null;
+    if (!appName || appName.trim() === 'Electron' || appName.trim() === 'davenport-files') return null;
     return { appName: appName.trim(), x: parseInt(x), y: parseInt(y), width: parseInt(w), height: parseInt(h) };
   } catch(e) {
     return null;
   }
 }
 
-function getSnapEdge(dockyardBounds, targetBounds, threshold = 60) {
-  const dock = dockyardBounds;
+function getSnapEdge(davenport-filesBounds, targetBounds, threshold = 60) {
+  const dock = davenport-filesBounds;
   const target = targetBounds;
   
   // Distance from each edge of target
@@ -383,9 +383,9 @@ function getSnapEdge(dockyardBounds, targetBounds, threshold = 60) {
   return null;
 }
 
-function getSnappedPosition(edge, targetBounds, dockyardBounds) {
+function getSnappedPosition(edge, targetBounds, davenport-filesBounds) {
   const t = targetBounds;
-  const d = dockyardBounds;
+  const d = davenport-filesBounds;
   switch(edge) {
     case 'right':  return { x: t.x + t.width, y: t.y, width: d.width, height: t.height };
     case 'left':   return { x: t.x - d.width, y: t.y, width: d.width, height: t.height };
@@ -399,11 +399,11 @@ ipcMain.handle('check-snap', () => {
     const target = getFrontmostWindowBounds();
     if (!target) return null;
     
-    const dockyardBounds = mainWindow.getBounds();
-    const edge = getSnapEdge(dockyardBounds, target, 80);
+    const davenport-filesBounds = mainWindow.getBounds();
+    const edge = getSnapEdge(davenport-filesBounds, target, 80);
     
     if (edge) {
-      const snapPos = getSnappedPosition(edge, target, dockyardBounds);
+      const snapPos = getSnappedPosition(edge, target, davenport-filesBounds);
       return { edge, target, snapPos, appName: target.appName };
     }
     return null;
@@ -414,8 +414,8 @@ ipcMain.handle('check-snap', () => {
 
 ipcMain.handle('do-snap', (_, { edge, target, appName }) => {
   try {
-    const dockyardBounds = mainWindow.getBounds();
-    const snapPos = getSnappedPosition(edge, target, dockyardBounds);
+    const davenport-filesBounds = mainWindow.getBounds();
+    const snapPos = getSnappedPosition(edge, target, davenport-filesBounds);
     
     mainWindow.setBounds({
       x: Math.round(snapPos.x),
@@ -466,8 +466,8 @@ ipcMain.handle('get-window-bounds', () => mainWindow.getBounds());
 ipcMain.handle('export-container', async (_, { container, assets, project }) => {
   const sn = safeName(container.name);
   const result = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: path.join(EXPORTS_DIR, `${sn}.dockyard.zip`),
-    filters: [{ name: 'Dockyard Package', extensions: ['zip'] }]
+    defaultPath: path.join(EXPORTS_DIR, `${sn}.davenport-files.zip`),
+    filters: [{ name: 'Davenport Files Package', extensions: ['zip'] }]
   });
   if (result.canceled) return false;
   try {
@@ -519,7 +519,7 @@ ipcMain.handle('regenerate-thumbnails', async (_, { containerId }) => {
 });
 
 ipcMain.handle('import-dock-package', async (_, { projectId }) => {
-  const result = await dialog.showOpenDialog(mainWindow, { filters: [{ name: 'Dockyard Package', extensions: ['zip'] }], properties: ['openFile'] });
+  const result = await dialog.showOpenDialog(mainWindow, { filters: [{ name: 'Davenport Files Package', extensions: ['zip'] }], properties: ['openFile'] });
   if (result.canceled) return null;
   try {
     const unzipper = require('unzipper');
