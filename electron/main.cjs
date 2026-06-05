@@ -12,18 +12,18 @@ protocol.registerSchemesAsPrivileged([
 ]);
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
-const DAVENPORT FILES_DIR = path.join(os.homedir(), 'Davenport Files');
-const ASSETS_DIR   = path.join(DAVENPORT FILES_DIR, 'assets');
-const THUMBS_DIR   = path.join(DAVENPORT FILES_DIR, 'thumbnails');
-const EXPORTS_DIR  = path.join(DAVENPORT FILES_DIR, 'exports');
-[DAVENPORT FILES_DIR, ASSETS_DIR, THUMBS_DIR, EXPORTS_DIR].forEach(d => {
+const DAVENPORT_DIR = path.join(os.homedir(), 'Davenport');
+const ASSETS_DIR   = path.join(DAVENPORT_DIR, 'assets');
+const THUMBS_DIR   = path.join(DAVENPORT_DIR, 'thumbnails');
+const EXPORTS_DIR  = path.join(DAVENPORT_DIR, 'exports');
+[DAVENPORT_DIR, ASSETS_DIR, THUMBS_DIR, EXPORTS_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
 
 let db = null;
 try {
   const Database = require('better-sqlite3');
-  db = new Database(path.join(DAVENPORT FILES_DIR, 'davenport-files.db'));
+  db = new Database(path.join(DAVENPORT_DIR, 'davenport-files.db'));
   db.pragma('journal_mode = WAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -328,7 +328,7 @@ ipcMain.handle('regen-thumbnails', async (_, { containerId }) => {
   console.log(`[THUMB] Regenerated ${count} thumbnails for container ${containerId}`);
   return count;
 });
-ipcMain.handle('get-data-dir', () => DAVENPORT FILES_DIR);
+ipcMain.handle('get-data-dir', () => DAVENPORT_DIR);
 ipcMain.handle('toggle-always-on-top', () => { alwaysOnTop=!alwaysOnTop; mainWindow.setAlwaysOnTop(alwaysOnTop,'floating'); return alwaysOnTop; });
 
 // ── SNAP TO DOCK ─────────────────────────────────────────────────────────
@@ -467,7 +467,7 @@ ipcMain.handle('export-container', async (_, { container, assets, project }) => 
   const sn = safeName(container.name);
   const result = await dialog.showSaveDialog(mainWindow, {
     defaultPath: path.join(EXPORTS_DIR, `${sn}.davenport-files.zip`),
-    filters: [{ name: 'Davenport Files Package', extensions: ['zip'] }]
+    filters: [{ name: 'Davenport Package', extensions: ['zip'] }]
   });
   if (result.canceled) return false;
   try {
@@ -519,7 +519,7 @@ ipcMain.handle('regenerate-thumbnails', async (_, { containerId }) => {
 });
 
 ipcMain.handle('import-dock-package', async (_, { projectId }) => {
-  const result = await dialog.showOpenDialog(mainWindow, { filters: [{ name: 'Davenport Files Package', extensions: ['zip'] }], properties: ['openFile'] });
+  const result = await dialog.showOpenDialog(mainWindow, { filters: [{ name: 'Davenport Package', extensions: ['zip'] }], properties: ['openFile'] });
   if (result.canceled) return null;
   try {
     const unzipper = require('unzipper');
