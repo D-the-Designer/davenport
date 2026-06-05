@@ -1,4 +1,4 @@
-# DOCKYARD v0.2
+# DAVENPORT FILES v0.2
 
 **Local-first asset manager for every program, every file type, every workflow.**
 
@@ -9,13 +9,13 @@
 **Requirements:** Node.js 18+, npm
 
 ```bash
-unzip dockyard-v0.2.zip
-cd dockyard-v2
+unzip davenport-files-v0.2.zip
+cd davenport-files-v2
 npm install
 npm run electron:dev
 ```
 
-App opens as a native window. Data stored at `~/Dockyard/`.
+App opens as a native window. Data stored at `~/Davenport Files/`.
 
 ## What's New in v0.2
 
@@ -29,8 +29,8 @@ App opens as a native window. Data stored at `~/Dockyard/`.
 - Three view modes — Grid, List, Manifest
 - Manifest view — pre-export audit table
 - Asset states — RAW / WORKING / APPROVED / FINAL
-- Container export as .dockyard.zip
-- Container import from .dockyard.zip
+- Container export as .davenport-files.zip
+- Container import from .davenport-files.zip
 - Prompt blocks with copy-to-clipboard
 - F9 hide/show · F2 jump to Raw
 - Full phosphor green CRT palette
@@ -46,11 +46,11 @@ npm run electron:build:linux  # .AppImage
 ## Data Location
 
 ```
-~/Dockyard/
-├── dockyard.db       SQLite database
+~/Davenport Files/
+├── davenport-files.db       SQLite database
 ├── assets/           All imported files (renamed)
 ├── thumbnails/       Generated previews
-└── exports/          .dockyard.zip packages
+└── exports/          .davenport-files.zip packages
 ```
 
 ## License
