@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('davenport-files', {
   trashOriginals:      (ps)   => ipcRenderer.invoke('trash-originals', ps),
   chooseDataDir:       ()     => ipcRenderer.invoke('choose-data-dir'),
   importFolderDialog:  (d)    => ipcRenderer.invoke('import-folder-dialog', d),
+  stageFiles:          (d)    => ipcRenderer.invoke('stage-files', d),
   startDrag:           (d)    => ipcRenderer.send('start-drag', d),
   startDragMulti:      (d)    => ipcRenderer.send('start-drag', d),
   openFile:            (fp)   => ipcRenderer.invoke('open-file', fp),
