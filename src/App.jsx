@@ -37,6 +37,7 @@ const api = window['davenport-files'] || {
   importFilesDialog:()=>Promise.resolve([]), importDroppedFiles:()=>Promise.resolve([]),
   trashOriginals:()=>Promise.resolve({trashed:[],skipped:[]}),
   chooseDataDir:()=>Promise.resolve(null), importFolderDialog:()=>Promise.resolve(null),
+  stageFiles:()=>Promise.resolve({staged:0,dir:null}),
   startDrag:()=>{}, openFile:()=>Promise.resolve(),
   getDataDir:()=>Promise.resolve('~/Davenport Files'), toggleAlwaysOnTop:()=>Promise.resolve(false),
   exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null), regenerateThumbnails:()=>Promise.resolve({count:0}),
@@ -346,7 +347,7 @@ const CtxItem = ({label,onClick,danger}) => (
 );
 
 // ── ASSET GRID ─────────────────────────────────────────────────────────────
-const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange}) => {
+const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange,onStage}) => {
   const [dragOver,setDragOver] = useState(false);
   const onDO = e=>{e.preventDefault();setDragOver(true);};
   const onDL = ()=>setDragOver(false);
@@ -449,6 +450,8 @@ const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,th
           <span style={{color:C.green}}>{multiSelected.size} SELECTED</span>
           <span style={{color:C.greenMuted}}>·</span>
           {STATE_OPTS.map(s=><button key={s} onClick={()=>onStateChange(null,s,true)} style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:STATE_COLOR[s],fontSize:8,fontFamily:"monospace",padding:"2px 6px",cursor:"pointer"}}>→ {s.toUpperCase()}</button>)}
+          <span style={{color:C.greenMuted}}>·</span>
+          <button onClick={()=>onStage&&onStage()} title="Copy selection to a staging folder and open it in Finder — drag the group from there into any app" style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:8,fontFamily:"monospace",padding:"2px 6px",cursor:"pointer",letterSpacing:1}}>⇱ OPEN IN FINDER</button>
           <span style={{flex:1}}/>
           <button onClick={()=>setMultiSelected(new Set())} style={{background:"transparent",border:"none",color:C.greenMuted,fontSize:8,fontFamily:"monospace",cursor:"pointer"}}>CLEAR</button>
         </div>
@@ -1186,6 +1189,18 @@ export default function App() {
     return()=>window.removeEventListener("keydown",h);
   },[handleSelectAll]);
 
+  // Stage selection into a Finder window for guaranteed multi-file drag
+  // into Firefly Boards / browser / anything, bypassing Electron drag limits.
+  const handleStage=async()=>{
+    const ids=multiSelected.size?[...multiSelected]:(selectedAssetId?[selectedAssetId]:[]);
+    const files=rawAssets.filter(a=>ids.includes(a.id)).map(a=>a.file_path).filter(Boolean);
+    if (!files.length) return notify("NOTHING SELECTED");
+    notify("STAGING...");
+    const res=await api.stageFiles({filePaths:files});
+    if (res.staged) notify(`${res.staged} STAGED — DRAG FROM THE FINDER WINDOW`,6000);
+    else notify("STAGING FAILED");
+  };
+
   useEffect(()=>{
     const h=(e)=>{
       if (e.key==="F9") setNarrow(n=>!n);
@@ -1275,6 +1290,7 @@ export default function App() {
                   assets={filteredAssets}
                   selectedId={selectedAssetId} onSelect={setSelectedAssetId}
                   multiSelected={multiSelected} setMultiSelected={setMultiSelected}
+                  onStage={handleStage}
                   thumbSize={thumbSize} viewMode={viewMode}
                   onDropFiles={handleDroppedFiles} onStartDrag={handleStartDrag}
                   onStateChange={handleStateChange}
