@@ -201,15 +201,17 @@ const tbtnActive = () => ({background:C.bgActive,border:`1px solid ${C.borderBri
 const tbtnGreen = () => ({background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"3px 8px",cursor:"pointer",letterSpacing:1});
 
 // ── TOOLBAR ────────────────────────────────────────────────────────────────
-const Toolbar = ({path,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode,search,setSearch,onImport}) => (
+const Toolbar = ({path,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode,search,setSearch,onImport,onSelectAll,selectedCount}) => (
   <div style={{height:36,background:C.bgSurface,borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:6,padding:"0 10px",flexShrink:0,fontFamily:"monospace"}}>
     {/* Path breadcrumb */}
     <span style={{fontSize:9,color:C.greenDim,letterSpacing:1,flex:"0 0 auto",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{path||"—"}</span>
     <div style={{flex:1}}/>
     {/* Primary actions */}
+    <button onClick={onSelectAll} style={selectedCount>0&&selectedCount===count?tbtnActive():tbtn()} title="Select all files in this folder (⌘A)">SELECT ALL</button>
+    <div style={{width:1,height:16,background:C.border}}/>
     <button onClick={onAddFolder} style={tbtnGreen()} title="Add folder">+ ADD FOLDER</button>
     <div style={{width:1,height:16,background:C.border}}/>
-    <button onClick={()=>window.dockyard?.openNotes()} style={tbtn()} title="Open Davenport Notes">NOTES</button>
+    <button onClick={()=>window['davenport-files']?.openNotes()} style={tbtn()} title="Open Davenport Notes">NOTES</button>
     <div style={{width:1,height:16,background:C.border}}/>
     {/* Search */}
     <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="SEARCH_"
@@ -1163,6 +1165,27 @@ export default function App() {
     if (ok) notify("EXPORTED AS .DOCK.ZIP");
   };
 
+  // Select all (filtered) assets in the current folder. With a search active,
+  // selects only the matching files — filter then select-all = batch by query.
+  const handleSelectAll=useCallback(()=>{
+    if (!filteredAssets.length) return;
+    setMultiSelected(new Set(filteredAssets.map(a=>a.id)));
+  },[filteredAssets]);
+
+  // Cmd/Ctrl+A — skip when typing in an input or textarea
+  useEffect(()=>{
+    const h=(e)=>{
+      if ((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="a") {
+        const t=e.target.tagName;
+        if (t==="INPUT"||t==="TEXTAREA") return;
+        e.preventDefault();
+        handleSelectAll();
+      }
+    };
+    window.addEventListener("keydown",h);
+    return()=>window.removeEventListener("keydown",h);
+  },[handleSelectAll]);
+
   useEffect(()=>{
     const h=(e)=>{
       if (e.key==="F9") setNarrow(n=>!n);
@@ -1238,6 +1261,8 @@ export default function App() {
                 thumbSize={thumbSize} setThumbSize={setThumbSize}
                 search={search} setSearch={setSearch}
                 onImport={handleImport}
+                onSelectAll={handleSelectAll}
+                selectedCount={multiSelected.size}
               />
               {!activeContainer ? (
                 <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,color:C.greenMuted,fontFamily:"monospace"}}>
