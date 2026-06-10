@@ -36,6 +36,7 @@ const api = window['davenport-files'] || {
   deleteAsset:()=>Promise.resolve(true), setAssetState:()=>Promise.resolve(true),
   importFilesDialog:()=>Promise.resolve([]), importDroppedFiles:()=>Promise.resolve([]),
   trashOriginals:()=>Promise.resolve({trashed:[],skipped:[]}),
+  chooseDataDir:()=>Promise.resolve(null), importFolderDialog:()=>Promise.resolve(null),
   startDrag:()=>{}, openFile:()=>Promise.resolve(),
   getDataDir:()=>Promise.resolve('~/Davenport Files'), toggleAlwaysOnTop:()=>Promise.resolve(false),
   exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null), regenerateThumbnails:()=>Promise.resolve({count:0}),
@@ -113,7 +114,7 @@ const AssetThumb = ({ asset, size=80 }) => {
 };
 
 // ── MENU BAR ────────────────────────────────────────────────────────────────
-const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}) => {
+const MenuBar = ({onImport,onImportFolder,onImportPkg,onChooseDataDir,onToggleTop,alwaysOnTop,narrow,setNarrow}) => {
   const [activeMenu,setActiveMenu] = useState(null);
   const menus = {
     FILES: [
@@ -121,9 +122,12 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
       {label:"Add Folder", action:"add-folder"},
       {sep:true},
       {label:"Import Files...", action:"import"},
+      {label:"Import Folder...", action:"import-folder"},
       {label:"Open Package...", action:"open-pkg"},
       {sep:true},
       {label:"Export Container...", action:"export"},
+      {sep:true},
+      {label:"Set Data Folder...", action:"data-dir"},
     ],
 
   };
@@ -148,7 +152,7 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
           <span>{narrow?"FULL":"NARROW"}</span>
         </button>
         {/* Notes launcher */}
-        <button onClick={()=>window.dockyard?.openNotes()}
+        <button onClick={()=>window['davenport-files']?.openNotes()}
           title="Open Davenport Notes"
           style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.greenDim,fontSize:10,fontFamily:"monospace",padding:"3px 10px",cursor:"pointer",letterSpacing:1,WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:5}}>
           <span>NOTES</span>
@@ -171,7 +175,9 @@ const MenuBar = ({onImport,onImportPkg,onToggleTop,alwaysOnTop,narrow,setNarrow}
                   : <button key={i} onClick={()=>{
                       setActiveMenu(null);
                       if(item.action==="import") onImport();
+                      else if(item.action==="import-folder") onImportFolder();
                       else if(item.action==="open-pkg") onImportPkg();
+                      else if(item.action==="data-dir") onChooseDataDir();
                     }}
                     style={{display:"block",width:"100%",background:"transparent",border:"none",color:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"6px 12px",cursor:"pointer",textAlign:"left",letterSpacing:1}}
                     onMouseEnter={e=>{e.currentTarget.style.background=C.bgHover;e.currentTarget.style.color=C.green;}}
@@ -1117,6 +1123,26 @@ export default function App() {
     if (cs){setContainers(prev=>[...prev.filter(c=>c.project_id!==activeProjectId),...cs]);notify("PACKAGE IMPORTED");}
   };
 
+  // Import an entire folder tree: folder -> container, subfolders -> nested
+  // containers, files renamed per container. Trash dialog covers the batch.
+  const handleImportFolder=async()=>{
+    if (!activeProjectId) return notify("SELECT A PROJECT FIRST");
+    notify("IMPORTING FOLDER...",10000);
+    const res=await api.importFolderDialog({projectId:activeProjectId,parentContainerId:activeContainerId||null});
+    if (!res) return setNotification(null);
+    setContainers(prev=>[...prev.filter(c=>c.project_id!==activeProjectId),...res.containers]);
+    notify(`IMPORTED ${res.imported.length} FILE${res.imported.length===1?"":"S"} FROM FOLDER`);
+    offerTrash(res.imported);
+  };
+
+  // Choose where the Davenport library lives. DB sits inside the data folder,
+  // so this switches libraries; reload to bootstrap from the new root.
+  const handleChooseDataDir=async()=>{
+    const dir=await api.chooseDataDir();
+    if (!dir) return;
+    window.location.reload();
+  };
+
   const handleRegenThumbs = async () => {
     notify("REGENERATING THUMBNAILS...");
     const result = await api.regenerateThumbnails({ containerId: activeContainerId });
@@ -1166,7 +1192,8 @@ export default function App() {
   return (
     <div style={{fontFamily:"monospace",background:C.bgBase,color:C.green,display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden"}}>
       <MenuBar
-        onImport={handleImport} onImportPkg={handleImportPkg}
+        onImport={handleImport} onImportFolder={handleImportFolder}
+        onImportPkg={handleImportPkg} onChooseDataDir={handleChooseDataDir}
         onToggleTop={handleToggleTop} alwaysOnTop={alwaysOnTop}
         narrow={narrow} setNarrow={handleSetNarrow}
       />
