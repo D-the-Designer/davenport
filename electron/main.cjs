@@ -344,6 +344,29 @@ ipcMain.handle('import-folder-dialog', async (_, { projectId, parentContainerId 
   return { containers: getContainers(projectId), imported };
 });
 
+// STAGE FOR DRAG — copy selected assets into a timestamped staging folder and
+// open it in Finder. Guaranteed multi-file route into any app regardless of
+// Electron's drag-out limitations: drag the group from the Finder window.
+ipcMain.handle('stage-files', async (_, { filePaths }) => {
+  try {
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    const stageDir = path.join(EXPORTS_DIR, `stage-${stamp}`);
+    fs.mkdirSync(stageDir, { recursive: true });
+    let n = 0;
+    for (const fp of filePaths || []) {
+      if (fp && fs.existsSync(fp)) {
+        fs.copyFileSync(fp, path.join(stageDir, path.basename(fp)));
+        n++;
+      }
+    }
+    if (n > 0) await shell.openPath(stageDir);
+    return { staged: n, dir: stageDir };
+  } catch(e) {
+    console.error('[STAGE]', e.message);
+    return { staged: 0, dir: null };
+  }
+});
+
 ipcMain.on('start-drag', (event, { filePath, thumbPath, filePaths }) => {
   try {
     const { nativeImage } = require('electron');
