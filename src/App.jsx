@@ -28,13 +28,14 @@ const STATE_OPTS  = ["raw","working","approved","final"];
 const STATE_COLOR = { raw:C.greenMuted, working:C.greenDim, approved:C.green, final:C.amber };
 const ICON = { image:"▣",vector:"⬡",audio:"◈",video:"▶",font:"Ag",color:"●",prompt:"✦",document:"≡",code:"</>",lut:"▨",other:"○" };
 
-const api = window.davenport-files || {
+const api = window['davenport-files'] || {
   getProjects:()=>Promise.resolve([]), upsertProject:(p)=>Promise.resolve([p]),
   deleteProject:()=>Promise.resolve([]), getContainers:()=>Promise.resolve([]),
   upsertContainer:(c)=>Promise.resolve([c]), deleteContainer:()=>Promise.resolve([]),
   getAssets:()=>Promise.resolve([]), upsertAsset:()=>Promise.resolve(true),
   deleteAsset:()=>Promise.resolve(true), setAssetState:()=>Promise.resolve(true),
   importFilesDialog:()=>Promise.resolve([]), importDroppedFiles:()=>Promise.resolve([]),
+  trashOriginals:()=>Promise.resolve({trashed:[],skipped:[]}),
   startDrag:()=>{}, openFile:()=>Promise.resolve(),
   getDataDir:()=>Promise.resolve('~/Davenport Files'), toggleAlwaysOnTop:()=>Promise.resolve(false),
   exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null), regenerateThumbnails:()=>Promise.resolve({count:0}),
@@ -711,6 +712,57 @@ const NotesModal=({container,onClose,onSave})=>{
 
 const Notif=({msg})=>msg?<div style={{position:"fixed",top:44,right:12,background:C.bgSurface,border:`1px solid ${C.green}`,padding:"6px 12px",fontSize:9,color:C.green,fontFamily:"monospace",letterSpacing:1,zIndex:300}}>{msg}</div>:null;
 
+// ── TRASH ORIGINALS DIALOG ────────────────────────────────────────────────
+// KEEP is the focused/safe default (Enter & Esc both keep). TRASH requires
+// a deliberate click. One dialog per drop — never per-file prompts.
+const TrashOriginalsModal=({batch,onResolve})=>{
+  const single=batch.length===1;
+  const [showList,setShowList]=useState(false);
+  const [remember,setRemember]=useState(false);
+  useEffect(()=>{
+    const onKey=(e)=>{if(e.key==="Escape"){e.preventDefault();onResolve("keep",false);}};
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[onResolve]);
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:C.bgSurface,border:`1px solid ${C.borderMed}`,padding:20,width:340,fontFamily:"monospace"}}>
+        <div style={{fontSize:10,color:C.green,letterSpacing:2,marginBottom:12}}>
+          {single?"// TRASH ORIGINAL?":`// TRASH ALL ${batch.length} ORIGINALS?`}
+        </div>
+        {single?(
+          <div style={{fontSize:9,color:C.greenDim,marginBottom:14,wordBreak:"break-all",lineHeight:1.6}}>
+            {batch[0].original_name} <span style={{color:C.green}}>→</span> {batch[0].title}
+          </div>
+        ):(
+          <div style={{marginBottom:14}}>
+            <div onClick={()=>setShowList(s=>!s)} style={{fontSize:8,color:C.greenDim,letterSpacing:1,cursor:"pointer",userSelect:"none"}}>
+              {showList?"▾ HIDE LIST":"▸ VIEW LIST"}
+            </div>
+            {showList&&(
+              <div style={{marginTop:8,maxHeight:140,overflowY:"auto",borderTop:`1px solid ${C.border}`,paddingTop:6}}>
+                {batch.map((f,i)=>(
+                  <div key={i} style={{fontSize:8,color:C.greenDim,marginBottom:3,wordBreak:"break-all"}}>
+                    {f.original_name} <span style={{color:C.green}}>→</span> {f.title}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <div onClick={()=>setRemember(r=>!r)} style={{display:"flex",alignItems:"center",gap:6,fontSize:8,color:C.greenMuted,letterSpacing:1,marginBottom:14,cursor:"pointer",userSelect:"none"}}>
+          <span style={{width:11,height:11,border:`1px solid ${C.borderMed}`,display:"inline-flex",alignItems:"center",justifyContent:"center",color:C.green,fontSize:9,lineHeight:1,flexShrink:0}}>{remember?"×":""}</span>
+          REMEMBER FOR THIS SESSION
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button autoFocus onClick={()=>onResolve("keep",remember)} style={{flex:1,background:C.bgActive,border:`1px solid ${C.green}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"6px 0",cursor:"pointer",letterSpacing:1,fontWeight:700}}>{single?"[ KEEP ]":"[ KEEP ALL ]"}</button>
+          <button onClick={()=>onResolve("trash",remember)} style={{flex:1,background:"transparent",border:`1px solid ${C.borderMed}`,color:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"6px 0",cursor:"pointer",letterSpacing:1}}>{single?"[ TRASH ]":"[ TRASH ALL ]"}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── CONNECTOR WIDGET ──────────────────────────────────────────────────────
 const ConnectorWidget = ({snapState, onSnap, onUndock}) => {
   if (!snapState) return null;
@@ -780,11 +832,32 @@ export default function App() {
 
   const notify=(msg,ms=3000)=>{setNotification(msg);setTimeout(()=>setNotification(null),ms);};
 
+  // Trash-originals flow: ask once per drop, session choice persists until quit
+  const [trashBatch,setTrashBatch] = useState(null);
+  const sessionTrashChoice = useRef(null); // null | "keep" | "trash"
+  const doTrash = async(items)=>{
+    const res = await api.trashOriginals(items.map(f=>f.original_path).filter(Boolean));
+    if (res.skipped?.length) notify(`${res.trashed.length} TRASHED · ${res.skipped.length} SKIPPED (NOT WRITABLE)`,5000);
+    else notify(`${res.trashed.length} ORIGINAL${res.trashed.length===1?"":"S"} TRASHED`);
+  };
+  const offerTrash = (imported)=>{
+    const withPaths = (imported||[]).filter(f=>f.original_path);
+    if (!withPaths.length) return;
+    if (sessionTrashChoice.current==="keep") return;
+    if (sessionTrashChoice.current==="trash") { doTrash(withPaths); return; }
+    setTrashBatch(withPaths);
+  };
+  const resolveTrash = (action,remember)=>{
+    const batch=trashBatch; setTrashBatch(null);
+    if (remember) sessionTrashChoice.current=action;
+    if (action==="trash"&&batch) doTrash(batch);
+  };
+
   // ── SNAP TO DOCK ────────────────────────────────────────────────────────
   // Check snap on demand — called when user stops moving window
   const checkSnap = useCallback(async()=>{
     if (snapState?.phase==='docked') return;
-    const api2 = window.davenport-files;
+    const api2 = window['davenport-files'];
     if (!api2?.checkSnap) return;
     const result = await api2.checkSnap();
     if (result) {
@@ -807,7 +880,7 @@ export default function App() {
 
   const handleSnap = async() => {
     if (!snapState?.snapData) return;
-    const result = await window.davenport-files.doSnap(snapState.snapData);
+    const result = await window['davenport-files'].doSnap(snapState.snapData);
     if (result?.success) {
       setSnapState({ edge: snapState.edge, appName: result.appName, phase: 'docked' });
       setNarrow(true);
@@ -816,7 +889,7 @@ export default function App() {
   };
 
   const handleUndock = async() => {
-    await window.davenport-files?.doUndock?.();
+    await window['davenport-files']?.doUndock?.();
     setSnapState(null);
     setNarrow(false);
     notify("UNDOCKED");
@@ -825,7 +898,7 @@ export default function App() {
   const handleSetNarrow = async (val) => {
     if (val) {
       // Save current size and shrink to narrow strip
-      if (window.davenport-files?.getDataDir) {
+      if (window['davenport-files']?.getDataDir) {
         // Use Electron to resize window
         try {
           const w = window.outerWidth;
@@ -902,6 +975,7 @@ export default function App() {
     if (!imported.length) return;
     setAssetMap(m=>({...m,[activeContainerId]:[...(m[activeContainerId]||[]),...imported]}));
     notify(`IMPORTED ${imported.length} FILE${imported.length>1?"S":""}`);
+    offerTrash(imported);
   };
 
   const handleDroppedFiles = useCallback(async(filePaths)=>{
@@ -910,6 +984,7 @@ export default function App() {
     if (!imported.length) return;
     setAssetMap(m=>({...m,[activeContainerId]:[...(m[activeContainerId]||[]),...imported]}));
     notify(`IMPORTED ${imported.length} FILE${imported.length>1?"S":""}`);
+    offerTrash(imported);
   },[activeContainerId,activeContainer,activeProjectId]);
 
   const multiSelectedRef = useRef(new Set());
@@ -1165,6 +1240,7 @@ export default function App() {
       {modal==="new-project"&&<NewProjectModal onClose={()=>setModal(null)} onCreate={handleCreateProject}/>}
       {modal==="new-folder"&&<NewFolderModal onClose={()=>setModal(null)} onCreate={handleCreateFolder} parentName={newFolderMeta.parentName}/>}
       {modal==="notes"&&<NotesModal container={activeContainer} onClose={()=>setModal(null)} onSave={handleSaveNotes}/>}
+      {trashBatch&&<TrashOriginalsModal batch={trashBatch} onResolve={resolveTrash}/>}
       <Notif msg={notification}/>
       <ConnectorWidget snapState={snapState} onSnap={handleSnap} onUndock={handleUndock}/>
     </div>
