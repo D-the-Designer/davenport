@@ -50,6 +50,12 @@ try {
       FOREIGN KEY(container_id) REFERENCES containers(id) ON DELETE CASCADE
     );
   `);
+  // MIGRATION: original_path (full source path at import time)
+  const assetCols = db.prepare(`PRAGMA table_info(assets)`).all().map(c => c.name);
+  if (!assetCols.includes('original_path')) {
+    db.exec(`ALTER TABLE assets ADD COLUMN original_path TEXT DEFAULT ''`);
+    console.log('[MIGRATION] assets.original_path added');
+  }
 } catch(e) { console.warn('[ELECTRON] SQLite memory mode:', e.message); }
 
 const q   = (sql, ...a) => { try { return db ? db.prepare(sql).all(...a) : []; } catch(e) { return []; } };
@@ -130,12 +136,12 @@ async function importFile(filePath, containerId, projectId, containerName) {
   const asset = {
     id: assetId, container_id: containerId, project_id: projectId, type,
     file_path: destPath, thumb_path: fs.existsSync(thumbPath) ? thumbPath : '',
-    title: newName, original_name: path.basename(filePath), sequence_num: seq,
+    title: newName, original_name: path.basename(filePath), original_path: filePath, sequence_num: seq,
     tags: '[]', notes: '', source: 'Imported', license: '', prompt_text: '',
     color: '', size: `${(stat.size/1024/1024).toFixed(1)} MB`, dimensions: '—', duration: '', state: 'raw',
   };
-  run(`INSERT OR REPLACE INTO assets(id,container_id,project_id,type,file_path,thumb_path,title,original_name,sequence_num,tags,notes,source,license,prompt_text,color,size,dimensions,duration,state)
-    VALUES(@id,@container_id,@project_id,@type,@file_path,@thumb_path,@title,@original_name,@sequence_num,@tags,@notes,@source,@license,@prompt_text,@color,@size,@dimensions,@duration,@state)`, asset);
+  run(`INSERT OR REPLACE INTO assets(id,container_id,project_id,type,file_path,thumb_path,title,original_name,original_path,sequence_num,tags,notes,source,license,prompt_text,color,size,dimensions,duration,state)
+    VALUES(@id,@container_id,@project_id,@type,@file_path,@thumb_path,@title,@original_name,@original_path,@sequence_num,@tags,@notes,@source,@license,@prompt_text,@color,@size,@dimensions,@duration,@state)`, asset);
   return { ...asset, tags: [] };
 }
 
@@ -237,14 +243,37 @@ ipcMain.handle('import-files-dialog', async (_, { containerId, projectId, contai
   });
   if (result.canceled || !result.filePaths.length) return [];
   const imported = [];
-  for (const fp of result.filePaths) imported.push(await importFile(fp, containerId, projectId, containerName));
+  for (const fp of result.filePaths) {
+    try { imported.push(await importFile(fp, containerId, projectId, containerName)); }
+    catch(e) { console.error('[IMPORT] Failed:', fp, e.message); }
+  }
   return imported;
 });
 
 ipcMain.handle('import-dropped-files', async (_, { filePaths, containerId, projectId, containerName }) => {
   const imported = [];
-  for (const fp of filePaths) { if (fs.existsSync(fp)) imported.push(await importFile(fp, containerId, projectId, containerName)); }
+  for (const fp of filePaths) {
+    if (!fs.existsSync(fp)) continue;
+    try { imported.push(await importFile(fp, containerId, projectId, containerName)); }
+    catch(e) { console.error('[IMPORT] Failed:', fp, e.message); }
+  }
   return imported;
+});
+
+// TRASH ORIGINALS — macOS Trash via shell.trashItem, never fs.unlink.
+// Only called by renderer AFTER import succeeds and user confirms.
+ipcMain.handle('trash-originals', async (_, paths) => {
+  const result = { trashed: [], skipped: [] };
+  for (const p of paths || []) {
+    try {
+      await shell.trashItem(p);
+      result.trashed.push(p);
+    } catch(e) {
+      result.skipped.push({ path: p, reason: e.message || 'UNKNOWN' });
+    }
+  }
+  console.log('[TRASH]', result.trashed.length, 'trashed,', result.skipped.length, 'skipped');
+  return result;
 });
 
 ipcMain.on('start-drag', (event, { filePath, thumbPath, filePaths }) => {
@@ -350,8 +379,8 @@ function getFrontmostWindowBounds() {
   }
 }
 
-function getSnapEdge(davenport-filesBounds, targetBounds, threshold = 60) {
-  const dock = davenport-filesBounds;
+function getSnapEdge(dvBounds, targetBounds, threshold = 60) {
+  const dock = dvBounds;
   const target = targetBounds;
   
   // Distance from each edge of target
@@ -370,9 +399,9 @@ function getSnapEdge(davenport-filesBounds, targetBounds, threshold = 60) {
   return null;
 }
 
-function getSnappedPosition(edge, targetBounds, davenport-filesBounds) {
+function getSnappedPosition(edge, targetBounds, dvBounds) {
   const t = targetBounds;
-  const d = davenport-filesBounds;
+  const d = dvBounds;
   switch(edge) {
     case 'right':  return { x: t.x + t.width, y: t.y, width: d.width, height: t.height };
     case 'left':   return { x: t.x - d.width, y: t.y, width: d.width, height: t.height };
@@ -386,11 +415,11 @@ ipcMain.handle('check-snap', () => {
     const target = getFrontmostWindowBounds();
     if (!target) return null;
     
-    const davenport-filesBounds = mainWindow.getBounds();
-    const edge = getSnapEdge(davenport-filesBounds, target, 80);
+    const dvBounds = mainWindow.getBounds();
+    const edge = getSnapEdge(dvBounds, target, 80);
     
     if (edge) {
-      const snapPos = getSnappedPosition(edge, target, davenport-filesBounds);
+      const snapPos = getSnappedPosition(edge, target, dvBounds);
       return { edge, target, snapPos, appName: target.appName };
     }
     return null;
@@ -401,8 +430,8 @@ ipcMain.handle('check-snap', () => {
 
 ipcMain.handle('do-snap', (_, { edge, target, appName }) => {
   try {
-    const davenport-filesBounds = mainWindow.getBounds();
-    const snapPos = getSnappedPosition(edge, target, davenport-filesBounds);
+    const dvBounds = mainWindow.getBounds();
+    const snapPos = getSnappedPosition(edge, target, dvBounds);
     
     mainWindow.setBounds({
       x: Math.round(snapPos.x),
