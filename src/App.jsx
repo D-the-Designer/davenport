@@ -114,7 +114,7 @@ const AssetThumb = ({ asset, size=80 }) => {
 };
 
 // ── MENU BAR ────────────────────────────────────────────────────────────────
-const MenuBar = ({onImport,onImportFolder,onImportPkg,onChooseDataDir,onToggleTop,alwaysOnTop,narrow,setNarrow}) => {
+const MenuBar = ({onImport,onImportFolder,onImportPkg,onChooseDataDir,onNewProject,onAddFolder,onExport,onToggleTop,alwaysOnTop,narrow,setNarrow}) => {
   const [activeMenu,setActiveMenu] = useState(null);
   const menus = {
     FILES: [
@@ -178,6 +178,9 @@ const MenuBar = ({onImport,onImportFolder,onImportPkg,onChooseDataDir,onToggleTo
                       else if(item.action==="import-folder") onImportFolder();
                       else if(item.action==="open-pkg") onImportPkg();
                       else if(item.action==="data-dir") onChooseDataDir();
+                      else if(item.action==="new-project") onNewProject();
+                      else if(item.action==="add-folder") onAddFolder();
+                      else if(item.action==="export") onExport();
                     }}
                     style={{display:"block",width:"100%",background:"transparent",border:"none",color:C.greenDim,fontSize:9,fontFamily:"monospace",padding:"6px 12px",cursor:"pointer",textAlign:"left",letterSpacing:1}}
                     onMouseEnter={e=>{e.currentTarget.style.background=C.bgHover;e.currentTarget.style.color=C.green;}}
@@ -1194,6 +1197,9 @@ export default function App() {
       <MenuBar
         onImport={handleImport} onImportFolder={handleImportFolder}
         onImportPkg={handleImportPkg} onChooseDataDir={handleChooseDataDir}
+        onNewProject={()=>setModal("new-project")}
+        onAddFolder={()=>{if(!activeProjectId)return notify("SELECT A PROJECT FIRST");openAddFolder(activeProjectId,activeContainerId||null);}}
+        onExport={handleExport}
         onToggleTop={handleToggleTop} alwaysOnTop={alwaysOnTop}
         narrow={narrow} setNarrow={handleSetNarrow}
       />
