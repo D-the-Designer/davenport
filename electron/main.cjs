@@ -12,20 +12,24 @@ protocol.registerSchemesAsPrivileged([
 ]);
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
-const DAVENPORT_DIR = path.join(os.homedir(), 'Davenport');
-const ASSETS_DIR   = path.join(DAVENPORT_DIR, 'assets');
-const THUMBS_DIR   = path.join(DAVENPORT_DIR, 'thumbnails');
-const EXPORTS_DIR  = path.join(DAVENPORT_DIR, 'exports');
-[DAVENPORT_DIR, ASSETS_DIR, THUMBS_DIR, EXPORTS_DIR].forEach(d => {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-});
+// ── DATA ROOT (configurable) ──────────────────────────────────────────────
+// Config lives in Electron userData; data root defaults to ~/Davenport.
+// The SQLite DB lives INSIDE the data root, so switching roots switches
+// libraries. Existing assets keep absolute file_path and remain readable.
+const CONFIG_PATH = path.join(app.getPath('userData'), 'davenport-config.json');
+const loadConfig = () => { try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch(e) { return {}; } };
+const saveConfig = (c) => { try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch(e) { console.error('[CONFIG]', e.message); } };
 
+let DAVENPORT_DIR, ASSETS_DIR, THUMBS_DIR, EXPORTS_DIR;
 let db = null;
-try {
-  const Database = require('better-sqlite3');
-  db = new Database(path.join(DAVENPORT_DIR, 'davenport-files.db'));
-  db.pragma('journal_mode = WAL');
-  db.exec(`
+
+function openDatabase() {
+  try {
+    if (db) { try { db.close(); } catch(e) {} db = null; }
+    const Database = require('better-sqlite3');
+    db = new Database(path.join(DAVENPORT_DIR, 'davenport-files.db'));
+    db.pragma('journal_mode = WAL');
+    db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT DEFAULT '',
       client TEXT DEFAULT '', scope TEXT DEFAULT '', deliverables TEXT DEFAULT '',
@@ -49,14 +53,29 @@ try {
       created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY(container_id) REFERENCES containers(id) ON DELETE CASCADE
     );
-  `);
-  // MIGRATION: original_path (full source path at import time)
-  const assetCols = db.prepare(`PRAGMA table_info(assets)`).all().map(c => c.name);
-  if (!assetCols.includes('original_path')) {
-    db.exec(`ALTER TABLE assets ADD COLUMN original_path TEXT DEFAULT ''`);
-    console.log('[MIGRATION] assets.original_path added');
-  }
-} catch(e) { console.warn('[ELECTRON] SQLite memory mode:', e.message); }
+    `);
+    // MIGRATION: original_path (full source path at import time)
+    const assetCols = db.prepare(`PRAGMA table_info(assets)`).all().map(c => c.name);
+    if (!assetCols.includes('original_path')) {
+      db.exec(`ALTER TABLE assets ADD COLUMN original_path TEXT DEFAULT ''`);
+      console.log('[MIGRATION] assets.original_path added');
+    }
+  } catch(e) { console.warn('[ELECTRON] SQLite memory mode:', e.message); }
+}
+
+function setDataRoot(root) {
+  DAVENPORT_DIR = root;
+  ASSETS_DIR   = path.join(root, 'assets');
+  THUMBS_DIR   = path.join(root, 'thumbnails');
+  EXPORTS_DIR  = path.join(root, 'exports');
+  [DAVENPORT_DIR, ASSETS_DIR, THUMBS_DIR, EXPORTS_DIR].forEach(d => {
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+  });
+  openDatabase();
+  console.log('[DATA ROOT]', DAVENPORT_DIR);
+}
+
+setDataRoot(loadConfig().dataDir || path.join(os.homedir(), 'Davenport'));
 
 const q   = (sql, ...a) => { try { return db ? db.prepare(sql).all(...a) : []; } catch(e) { return []; } };
 const run = (sql, ...a) => { try { if (db) db.prepare(sql).run(...a); } catch(e) { console.error(e.message); } };
@@ -274,6 +293,55 @@ ipcMain.handle('trash-originals', async (_, paths) => {
   }
   console.log('[TRASH]', result.trashed.length, 'trashed,', result.skipped.length, 'skipped');
   return result;
+});
+
+// SET DATA FOLDER — choose where the Davenport library lives. The DB sits
+// inside the chosen folder, so picking a folder with an existing
+// davenport-files.db opens that library; picking an empty one starts fresh.
+ipcMain.handle('choose-data-dir', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose Davenport Data Folder',
+    buttonLabel: 'Use This Folder',
+    defaultPath: DAVENPORT_DIR,
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  const root = result.filePaths[0];
+  setDataRoot(root);
+  const cfg = loadConfig(); cfg.dataDir = root; saveConfig(cfg);
+  return root;
+});
+
+// IMPORT FOLDER — browse to any folder; it becomes a container (under the
+// current container if one is active), subfolders become nested containers,
+// files import with the standard rename convention. Dotfiles skipped.
+ipcMain.handle('import-folder-dialog', async (_, { projectId, parentContainerId }) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Folder',
+    buttonLabel: 'Import',
+    properties: ['openDirectory'],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  const rootDir = result.filePaths[0];
+  const imported = [];
+  async function walk(dir, parentId) {
+    const name = path.basename(dir);
+    const cid = `cont-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    run('INSERT INTO containers(id,project_id,parent_id,name,notes,sort_order) VALUES(?,?,?,?,?,0)', cid, projectId, parentId, name, '');
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const ent of entries) {
+      if (ent.name.startsWith('.')) continue;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        await walk(full, cid);
+      } else if (ent.isFile()) {
+        try { imported.push(await importFile(full, cid, projectId, name)); }
+        catch(e) { console.error('[IMPORT-FOLDER] Failed:', full, e.message); }
+      }
+    }
+  }
+  await walk(rootDir, parentContainerId || null);
+  return { containers: getContainers(projectId), imported };
 });
 
 ipcMain.on('start-drag', (event, { filePath, thumbPath, filePaths }) => {
