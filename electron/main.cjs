@@ -87,6 +87,59 @@ const getAssets      = (cid) => q('SELECT * FROM assets WHERE container_id=? ORD
 const nextSeq        = (cid) => { const r=g1('SELECT MAX(sequence_num) as m FROM assets WHERE container_id=?',cid); return (r?.m||0)+1; };
 const safeName       = (s)   => s.replace(/[^a-zA-Z0-9\-_]/g,'-').replace(/-+/g,'-').slice(0,40);
 
+// ── REAL DIRECTORY LAYOUT ─────────────────────────────────────────────────
+// Davenport rule #1: the container tree IS the directory tree.
+// ~/Davenport/[Project]/[Container]/[Nested]/file.ext — visible in Finder.
+const dirName = (s) => String(s||'').replace(/[\/:\\]/g,'-').trim() || 'Untitled';
+const RESERVED_DIRS = new Set(['assets','thumbnails','exports']);
+function projectDirPath(projectId) {
+  const p = g1('SELECT * FROM projects WHERE id=?', projectId);
+  if (!p) return null;
+  let n = dirName(p.name);
+  if (RESERVED_DIRS.has(n.toLowerCase())) n = `${n}-project`;
+  return path.join(DAVENPORT_DIR, n);
+}
+function containerDirPath(containerId) {
+  let c = g1('SELECT * FROM containers WHERE id=?', containerId);
+  if (!c) return null;
+  const projectId = c.project_id;
+  const segs = [];
+  while (c) { segs.unshift(dirName(c.name)); c = c.parent_id ? g1('SELECT * FROM containers WHERE id=?', c.parent_id) : null; }
+  const pd = projectDirPath(projectId);
+  return pd ? path.join(pd, ...segs) : null;
+}
+function ensureDir(d) { try { if (d && !fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); return d; } catch(e) { console.error('[DIR]', e.message); return null; } }
+
+// One-time (idempotent) migration: any asset still living flat in assets/
+// moves into its container's real directory. Failures leave the file and DB
+// row untouched. Runs at startup and after data-root switches.
+function migrateFlatAssets() {
+  try {
+    if (!db) return;
+    const rows = q('SELECT id, file_path, container_id FROM assets');
+    let moved = 0, failed = 0;
+    for (const r of rows) {
+      if (!r.file_path || !r.file_path.startsWith(ASSETS_DIR + path.sep)) continue;
+      if (!fs.existsSync(r.file_path)) continue;
+      try {
+        const destDir = ensureDir(containerDirPath(r.container_id));
+        if (!destDir) continue;
+        let dest = path.join(destDir, path.basename(r.file_path));
+        let i = 1;
+        while (fs.existsSync(dest)) {
+          const e = path.extname(r.file_path); const b = path.basename(r.file_path, e);
+          dest = path.join(destDir, `${b}-${i++}${e}`);
+        }
+        fs.renameSync(r.file_path, dest);
+        run('UPDATE assets SET file_path=? WHERE id=?', dest, r.id);
+        moved++;
+      } catch(e) { failed++; console.error('[MIGRATE]', r.id, e.message); }
+    }
+    if (moved || failed) console.log(`[MIGRATE] real-directory layout: ${moved} moved, ${failed} failed`);
+  } catch(e) { console.error('[MIGRATE]', e.message); }
+}
+migrateFlatAssets();
+
 async function generateThumb(src, dest, type) {
   if (!['image','vector'].includes(type)) return false;
   try {
@@ -134,7 +187,7 @@ async function importFile(filePath, containerId, projectId, containerName) {
   const stat = fs.statSync(filePath);
   const origExt = path.extname(filePath).toLowerCase();
   const type = detectType(origExt);
-  const seq = nextSeq(containerId);
+  let seq = nextSeq(containerId);
   const sName = safeName(containerName);
   let finalExt = origExt, srcForCopy = filePath;
   if (origExt === '.webp') {
@@ -146,8 +199,14 @@ async function importFile(filePath, containerId, projectId, containerName) {
     } catch(e) {}
   }
   const assetId = `asset-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
-  const newName = `${sName}_${String(seq).padStart(3,'0')}${finalExt}`;
-  const destPath = path.join(ASSETS_DIR, newName);
+  const destDir = ensureDir(containerDirPath(containerId)) || ASSETS_DIR;
+  let newName, destPath;
+  for (;;) {
+    newName = `${sName}_${String(seq).padStart(3,'0')}${finalExt}`;
+    destPath = path.join(destDir, newName);
+    if (!fs.existsSync(destPath)) break;
+    seq++;
+  }
   fs.copyFileSync(srcForCopy, destPath);
   if (srcForCopy !== filePath && fs.existsSync(srcForCopy)) fs.unlinkSync(srcForCopy);
   const thumbPath = path.join(THUMBS_DIR, `${assetId}_thumb.png`);
@@ -230,19 +289,49 @@ ipcMain.handle('open-notes-window', () => { openNotesWindow(); });
 
 ipcMain.handle('get-projects', () => getProjects());
 ipcMain.handle('upsert-project', (_, p) => {
+  const old = g1('SELECT * FROM projects WHERE id=?', p.id);
+  const oldDir = old ? projectDirPath(p.id) : null;
   run(`INSERT OR REPLACE INTO projects(id,name,description,client,scope,deliverables,deadline,status,notes,created_at,updated_at)
     VALUES(@id,@name,@description,@client,@scope,@deliverables,@deadline,@status,@notes,COALESCE((SELECT created_at FROM projects WHERE id=@id),datetime('now')),datetime('now'))`, p);
+  const newDir = projectDirPath(p.id);
+  try {
+    if (oldDir && newDir && oldDir !== newDir && fs.existsSync(oldDir)) {
+      fs.renameSync(oldDir, newDir);
+      const affected = q('SELECT id,file_path FROM assets WHERE file_path LIKE ?', oldDir + path.sep + '%');
+      for (const a of affected) run('UPDATE assets SET file_path=? WHERE id=?', newDir + a.file_path.slice(oldDir.length), a.id);
+    } else ensureDir(newDir);
+  } catch(e) { console.error('[PROJECT DIR]', e.message); }
   return getProjects();
 });
-ipcMain.handle('delete-project', (_, id) => { run('DELETE FROM projects WHERE id=?', id); return getProjects(); });
+ipcMain.handle('delete-project', async (_, id) => {
+  const dir = projectDirPath(id);
+  run('DELETE FROM projects WHERE id=?', id);
+  try { if (dir && fs.existsSync(dir)) await shell.trashItem(dir); } catch(e) { console.error('[PROJECT DIR]', e.message); }
+  return getProjects();
+});
 
 ipcMain.handle('get-containers', (_, pid) => getContainers(pid));
 ipcMain.handle('upsert-container', (_, c) => {
+  const old = g1('SELECT * FROM containers WHERE id=?', c.id);
+  const oldDir = old ? containerDirPath(c.id) : null;
   run(`INSERT OR REPLACE INTO containers(id,project_id,parent_id,name,notes,sort_order,created_at,updated_at)
     VALUES(@id,@project_id,@parent_id,@name,@notes,@sort_order,COALESCE((SELECT created_at FROM containers WHERE id=@id),datetime('now')),datetime('now'))`, c);
+  const newDir = containerDirPath(c.id);
+  try {
+    if (oldDir && newDir && oldDir !== newDir && fs.existsSync(oldDir)) {
+      fs.renameSync(oldDir, newDir);
+      const affected = q('SELECT id,file_path FROM assets WHERE file_path LIKE ?', oldDir + path.sep + '%');
+      for (const a of affected) run('UPDATE assets SET file_path=? WHERE id=?', newDir + a.file_path.slice(oldDir.length), a.id);
+    } else ensureDir(newDir);
+  } catch(e) { console.error('[CONTAINER DIR]', e.message); }
   return getContainers(c.project_id);
 });
-ipcMain.handle('delete-container', (_, { id, projectId }) => { run('DELETE FROM containers WHERE id=?', id); return getContainers(projectId); });
+ipcMain.handle('delete-container', async (_, { id, projectId }) => {
+  const dir = containerDirPath(id);
+  run('DELETE FROM containers WHERE id=?', id);
+  try { if (dir && fs.existsSync(dir)) await shell.trashItem(dir); } catch(e) { console.error('[CONTAINER DIR]', e.message); }
+  return getContainers(projectId);
+});
 
 ipcMain.handle('get-assets', (_, cid) => getAssets(cid));
 ipcMain.handle('upsert-asset', (_, a) => {
@@ -328,6 +417,7 @@ ipcMain.handle('import-folder-dialog', async (_, { projectId, parentContainerId 
     const name = path.basename(dir);
     const cid = `cont-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
     run('INSERT INTO containers(id,project_id,parent_id,name,notes,sort_order) VALUES(?,?,?,?,?,0)', cid, projectId, parentId, name, '');
+    ensureDir(containerDirPath(cid));
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const ent of entries) {
       if (ent.name.startsWith('.')) continue;
@@ -382,7 +472,7 @@ function moveAssetsCore(assetIds, targetContainerId) {
       let seq = nextSeq(targetContainerId);
       const ext = path.extname(a.file_path || a.title || '') || '';
       let newName, newPath;
-      const dir = a.file_path ? path.dirname(a.file_path) : ASSETS_DIR;
+      const dir = ensureDir(containerDirPath(targetContainerId)) || (a.file_path ? path.dirname(a.file_path) : ASSETS_DIR);
       // bump seq past any physical name collision
       for (;;) {
         newName = `${sName}_${String(seq).padStart(3,'0')}${ext}`;
@@ -694,11 +784,12 @@ ipcMain.handle('import-dock-package', async (_, { projectId }) => {
     const { container, assets } = manifest;
     const newCid = `cont-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
     run('INSERT INTO containers(id,project_id,parent_id,name,notes,sort_order) VALUES(?,?,NULL,?,?,0)', newCid, projectId, `${container.name} (imported)`, container.notes||'');
+    const pkgDir = ensureDir(containerDirPath(newCid)) || ASSETS_DIR;
     for (const a of (assets||[])) {
       const fe = zip.files.find(f => f.path === `assets/${a.title}`);
       if (fe) {
         const buf = await fe.buffer();
-        const dest = path.join(ASSETS_DIR, `${newCid}_${a.title}`);
+        const dest = path.join(pkgDir, a.title);
         fs.writeFileSync(dest, buf);
         const seq = nextSeq(newCid);
         run('INSERT INTO assets(id,container_id,project_id,type,file_path,thumb_path,title,original_name,sequence_num,tags,notes,source,license,prompt_text,color,size,dimensions,duration,state) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
