@@ -397,6 +397,7 @@ ipcMain.handle('choose-data-dir', async () => {
   if (result.canceled || !result.filePaths.length) return null;
   const root = result.filePaths[0];
   setDataRoot(root);
+  migrateFlatAssets();
   const cfg = loadConfig(); cfg.dataDir = root; saveConfig(cfg);
   return root;
 });
