@@ -367,6 +367,63 @@ ipcMain.handle('stage-files', async (_, { filePaths }) => {
   }
 });
 
+// MOVE ASSETS — reassign to a target container, re-deriving filename/title
+// from the destination's naming convention (container_NNN.ext). Provenance
+// fields (original_name, original_path) are preserved untouched.
+function moveAssetsCore(assetIds, targetContainerId) {
+  const target = g1('SELECT * FROM containers WHERE id=?', targetContainerId);
+  if (!target) return { moved: 0 };
+  const sName = safeName(target.name);
+  let moved = 0;
+  for (const id of assetIds || []) {
+    const a = g1('SELECT * FROM assets WHERE id=?', id);
+    if (!a || a.container_id === targetContainerId) continue;
+    try {
+      let seq = nextSeq(targetContainerId);
+      const ext = path.extname(a.file_path || a.title || '') || '';
+      let newName, newPath;
+      const dir = a.file_path ? path.dirname(a.file_path) : ASSETS_DIR;
+      // bump seq past any physical name collision
+      for (;;) {
+        newName = `${sName}_${String(seq).padStart(3,'0')}${ext}`;
+        newPath = path.join(dir, newName);
+        if (newPath === a.file_path || !fs.existsSync(newPath)) break;
+        seq++;
+      }
+      if (a.file_path && fs.existsSync(a.file_path) && newPath !== a.file_path) {
+        fs.renameSync(a.file_path, newPath);
+      }
+      run(`UPDATE assets SET container_id=?, title=?, sequence_num=?, file_path=?, updated_at=datetime('now') WHERE id=?`,
+        targetContainerId, newName, seq, newPath, id);
+      moved++;
+    } catch(e) { console.error('[MOVE] Failed:', id, e.message); }
+  }
+  return { moved };
+}
+
+ipcMain.handle('move-assets', (_, { assetIds, targetContainerId }) =>
+  moveAssetsCore(assetIds, targetContainerId));
+
+// MOVE OR IMPORT — drop onto a sidebar folder. Paths matching existing
+// project assets are MOVED; unknown paths are IMPORTED into that folder.
+ipcMain.handle('move-or-import', async (_, { filePaths, targetContainerId, projectId }) => {
+  const target = g1('SELECT * FROM containers WHERE id=?', targetContainerId);
+  if (!target) return null;
+  const moveIds = [], importPaths = [];
+  for (const p of filePaths || []) {
+    const existing = g1('SELECT id FROM assets WHERE file_path=? AND project_id=?', p, projectId);
+    if (existing) moveIds.push(existing.id); else importPaths.push(p);
+  }
+  const { moved } = moveAssetsCore(moveIds, targetContainerId);
+  const imported = [];
+  for (const p of importPaths) {
+    if (!fs.existsSync(p)) continue;
+    try { imported.push(await importFile(p, targetContainerId, projectId, target.name)); }
+    catch(e) { console.error('[MOVE-OR-IMPORT] Import failed:', p, e.message); }
+  }
+  return { moved, imported };
+});
+
 ipcMain.on('start-drag', (event, { filePath, thumbPath, filePaths }) => {
   try {
     const { nativeImage } = require('electron');
