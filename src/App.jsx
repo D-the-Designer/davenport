@@ -203,10 +203,22 @@ const tbtnActive = () => ({background:C.bgActive,border:`1px solid ${C.borderBri
 const tbtnGreen = () => ({background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"3px 8px",cursor:"pointer",letterSpacing:1});
 
 // ── TOOLBAR ────────────────────────────────────────────────────────────────
-const Toolbar = ({path,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode,search,setSearch,onImport,onSelectAll,selectedCount}) => (
+const Toolbar = ({path,crumbs,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode,search,setSearch,onImport,onSelectAll,selectedCount}) => (
   <div style={{height:36,background:C.bgSurface,borderBottom:`1px solid ${C.borderMed}`,display:"flex",alignItems:"center",gap:6,padding:"0 10px",flexShrink:0,fontFamily:"monospace"}}>
-    {/* Path breadcrumb */}
-    <span style={{fontSize:9,color:C.greenDim,letterSpacing:1,flex:"0 0 auto",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{path||"—"}</span>
+    {/* Clickable path breadcrumb — OS segments open in Finder, app segments navigate */}
+    <div style={{display:"flex",alignItems:"center",overflowX:"auto",whiteSpace:"nowrap",maxWidth:400,flex:"0 1 auto",scrollbarWidth:"none"}}>
+      {(crumbs&&crumbs.length>0)?crumbs.map((c,i)=>(
+        <span key={i} style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
+          {i>0&&<span style={{color:C.greenMuted,fontSize:9,margin:"0 4px"}}>/</span>}
+          <button onClick={c.onClick}
+            title={c.os?`Open ${c.label} in Finder`:`Go to ${c.label}`}
+            onMouseEnter={e=>e.currentTarget.style.color=C.green}
+            onMouseLeave={e=>e.currentTarget.style.color=c.os?C.greenMuted:(i===crumbs.length-1?C.green:C.greenDim)}
+            style={{background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"monospace",fontSize:9,letterSpacing:1,color:c.os?C.greenMuted:(i===crumbs.length-1?C.green:C.greenDim)}}
+          >{c.label}</button>
+        </span>
+      )):<span style={{fontSize:9,color:C.greenDim,letterSpacing:1}}>{path||"—"}</span>}
+    </div>
     <div style={{flex:1}}/>
     {/* Primary actions */}
     <button onClick={onSelectAll} style={selectedCount>0&&selectedCount===count?tbtnActive():tbtn()} title="Select all files in this folder (⌘A)">SELECT ALL</button>
@@ -1038,6 +1050,30 @@ export default function App() {
 
   const currentPath = activeProject&&activeContainer ? `${activeProject.name} / ${activeContainer.name}` : activeProject?.name||"";
 
+  // Full clickable breadcrumb: OS path segments (open in Finder) + project +
+  // container ancestor chain (navigate in-app).
+  const crumbs = (()=>{
+    const out=[];
+    if (dataDir) {
+      const parts=String(dataDir).split("/").filter(Boolean);
+      let acc="";
+      parts.forEach(p=>{
+        acc+="/"+p;
+        const target=acc;
+        out.push({label:p,os:true,onClick:()=>api.openFile(target)});
+      });
+    }
+    if (activeProject) {
+      out.push({label:activeProject.name,onClick:()=>{setActiveContainerId(null);setSelectedAssetId(null);setMultiSelected(new Set());}});
+      if (activeContainer) {
+        const chain=[];let c=activeContainer;
+        while(c){chain.unshift(c);c=containers.find(x=>x.id===c.parent_id);}
+        chain.forEach(cc=>out.push({label:cc.name,onClick:()=>{setActiveContainerId(cc.id);setSelectedAssetId(null);setMultiSelected(new Set());}}));
+      }
+    }
+    return out;
+  })();
+
   // Import
   const handleImport = async () => {
     if (!activeContainerId||!activeContainer) return notify("SELECT A FOLDER FIRST");
@@ -1355,6 +1391,7 @@ export default function App() {
             <>
               <Toolbar
                 path={currentPath}
+                crumbs={crumbs}
                 onBack={()=>setActiveContainerId(null)}
                 onAddFolder={()=>openAddFolder(activeProjectId,activeContainerId)}
                 onManifest={()=>setViewMode(v=>v==="manifest"?"grid":"manifest")}
