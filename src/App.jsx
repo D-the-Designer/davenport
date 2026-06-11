@@ -289,7 +289,7 @@ const FolderRow = ({container,depth,active,containers,activeContainerId,containe
   );
 };
 
-const Sidebar = ({projects,activeProjectId,setActiveProjectId,containers,activeContainerId,setActiveContainerId,containerAssetCounts,onAddFolder,onDeleteContainer,onDropToFolder}) => {
+const Sidebar = ({projects,activeProjectId,setActiveProjectId,containers,activeContainerId,setActiveContainerId,containerAssetCounts,onAddFolder,onDeleteContainer,onDropToFolder,onNewProject}) => {
   const [expanded,setExpanded] = useState({});
   const [ctxMenu,setCtxMenu] = useState(null);
 
@@ -329,7 +329,14 @@ const Sidebar = ({projects,activeProjectId,setActiveProjectId,containers,activeC
         </div>
       ))}
 
-      <div style={{marginTop:"auto",padding:8,borderTop:`1px solid ${C.border}`}}>
+      <div style={{marginTop:"auto",padding:8,borderTop:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:6}}>
+        <button onClick={()=>onNewProject&&onNewProject()}
+          style={{width:"100%",background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"5px 0",cursor:"pointer",letterSpacing:1}}
+          title="Create a new project"
+          onMouseEnter={e=>e.currentTarget.style.borderColor=C.green}
+          onMouseLeave={e=>e.currentTarget.style.borderColor=C.borderMed}>
+          + NEW PROJECT
+        </button>
         <button onClick={()=>onAddFolder(activeProjectId,activeContainerId)}
           style={{width:"100%",background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:9,fontFamily:"monospace",padding:"5px 0",cursor:"pointer",letterSpacing:1}}
           title={activeContainerId?"Add folder inside current":"Add folder to project"}
@@ -1332,6 +1339,7 @@ export default function App() {
           containerAssetCounts={containerAssetCounts}
           onAddFolder={openAddFolder}
           onDropToFolder={handleDropToFolder}
+          onNewProject={()=>setModal("new-project")}
           onDeleteContainer={async({id,projectId})=>{
             const updated=await api.deleteContainer({id,projectId});
             setContainers(prev=>[...prev.filter(c=>c.project_id!==projectId),...updated]);
