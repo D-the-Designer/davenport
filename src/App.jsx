@@ -38,6 +38,7 @@ const api = window['davenport-files'] || {
   trashOriginals:()=>Promise.resolve({trashed:[],skipped:[]}),
   chooseDataDir:()=>Promise.resolve(null), importFolderDialog:()=>Promise.resolve(null),
   stageFiles:()=>Promise.resolve({staged:0,dir:null}),
+  moveAssets:()=>Promise.resolve({moved:0}), moveOrImport:()=>Promise.resolve(null),
   startDrag:()=>{}, openFile:()=>Promise.resolve(),
   getDataDir:()=>Promise.resolve('~/Davenport Files'), toggleAlwaysOnTop:()=>Promise.resolve(false),
   exportContainer:()=>Promise.resolve(false), importDockPackage:()=>Promise.resolve(null), regenerateThumbnails:()=>Promise.resolve({count:0}),
@@ -231,8 +232,9 @@ const Toolbar = ({path,onAddFolder,onManifest,onNotes,count,viewMode,setViewMode
 );
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────
-const FolderRow = ({container,depth,active,containers,activeContainerId,containerAssetCounts,setActiveProjectId,setActiveContainerId,onAddFolder,onDeleteContainer,projectId,ctxMenu,setCtxMenu}) => {
+const FolderRow = ({container,depth,active,containers,activeContainerId,containerAssetCounts,setActiveProjectId,setActiveContainerId,onAddFolder,onDeleteContainer,onDropToFolder,projectId,ctxMenu,setCtxMenu}) => {
   const [hovered,setHovered] = useState(null);
+  const [dropOver,setDropOver] = useState(false);
   const children = containers.filter(c=>c.parent_id===container.id);
   const isActive = activeContainerId===container.id;
   const indent = 8 + depth * 14;
@@ -243,7 +245,14 @@ const FolderRow = ({container,depth,active,containers,activeContainerId,containe
         onMouseEnter={()=>setHovered(container.id)}
         onMouseLeave={()=>setHovered(null)}
         onContextMenu={e=>{e.preventDefault();setCtxMenu({x:e.clientX,y:e.clientY,c:container,projectId});}}
-        style={{display:"flex",alignItems:"center",background:isActive?C.bgActive:"transparent",borderLeft:`2px solid ${isActive?C.greenDim:"transparent"}`}}
+        onDragOver={e=>{e.preventDefault();e.stopPropagation();if(!dropOver)setDropOver(true);}}
+        onDragLeave={()=>setDropOver(false)}
+        onDrop={e=>{
+          e.preventDefault();e.stopPropagation();setDropOver(false);
+          const paths=[...e.dataTransfer.files].map(f=>f.path).filter(Boolean);
+          if(paths.length&&onDropToFolder)onDropToFolder(container.id,paths);
+        }}
+        style={{display:"flex",alignItems:"center",background:dropOver?C.bgActive:(isActive?C.bgActive:"transparent"),borderLeft:`2px solid ${dropOver?C.green:(isActive?C.greenDim:"transparent")}`,outline:dropOver?`1px dashed ${C.green}`:"none",outlineOffset:-1}}
       >
         <button onClick={()=>{setActiveProjectId(projectId);setActiveContainerId(container.id);}}
           style={{flex:1,background:"transparent",border:"none",display:"flex",alignItems:"center",gap:4,padding:`4px 8px 4px ${indent}px`,cursor:"pointer",textAlign:"left",fontFamily:"monospace"}}>
@@ -270,6 +279,7 @@ const FolderRow = ({container,depth,active,containers,activeContainerId,containe
           setActiveContainerId={setActiveContainerId}
           onAddFolder={onAddFolder}
           onDeleteContainer={onDeleteContainer}
+          onDropToFolder={onDropToFolder}
           projectId={projectId}
           ctxMenu={ctxMenu}
           setCtxMenu={setCtxMenu}
@@ -279,7 +289,7 @@ const FolderRow = ({container,depth,active,containers,activeContainerId,containe
   );
 };
 
-const Sidebar = ({projects,activeProjectId,setActiveProjectId,containers,activeContainerId,setActiveContainerId,containerAssetCounts,onAddFolder,onDeleteContainer}) => {
+const Sidebar = ({projects,activeProjectId,setActiveProjectId,containers,activeContainerId,setActiveContainerId,containerAssetCounts,onAddFolder,onDeleteContainer,onDropToFolder}) => {
   const [expanded,setExpanded] = useState({});
   const [ctxMenu,setCtxMenu] = useState(null);
 
@@ -310,6 +320,7 @@ const Sidebar = ({projects,activeProjectId,setActiveProjectId,containers,activeC
               setActiveContainerId={setActiveContainerId}
               onAddFolder={onAddFolder}
               onDeleteContainer={onDeleteContainer}
+              onDropToFolder={onDropToFolder}
               projectId={p.id}
               ctxMenu={ctxMenu}
               setCtxMenu={setCtxMenu}
@@ -347,7 +358,7 @@ const CtxItem = ({label,onClick,danger}) => (
 );
 
 // ── ASSET GRID ─────────────────────────────────────────────────────────────
-const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange,onStage}) => {
+const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,thumbSize,viewMode,onDropFiles,onStartDrag,onStateChange,onStage,onMoveTo}) => {
   const [dragOver,setDragOver] = useState(false);
   const onDO = e=>{e.preventDefault();setDragOver(true);};
   const onDL = ()=>setDragOver(false);
@@ -451,6 +462,7 @@ const AssetGrid = ({assets,selectedId,onSelect,multiSelected,setMultiSelected,th
           <span style={{color:C.greenMuted}}>·</span>
           {STATE_OPTS.map(s=><button key={s} onClick={()=>onStateChange(null,s,true)} style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:STATE_COLOR[s],fontSize:8,fontFamily:"monospace",padding:"2px 6px",cursor:"pointer"}}>→ {s.toUpperCase()}</button>)}
           <span style={{color:C.greenMuted}}>·</span>
+          <button onClick={()=>onMoveTo&&onMoveTo()} title="Move selection to another folder" style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:8,fontFamily:"monospace",padding:"2px 6px",cursor:"pointer",letterSpacing:1}}>→ MOVE TO...</button>
           <button onClick={()=>onStage&&onStage()} title="Copy selection to a staging folder and open it in Finder — drag the group from there into any app" style={{background:"transparent",border:`1px solid ${C.borderMed}`,color:C.green,fontSize:8,fontFamily:"monospace",padding:"2px 6px",cursor:"pointer",letterSpacing:1}}>⇱ OPEN IN FINDER</button>
           <span style={{flex:1}}/>
           <button onClick={()=>setMultiSelected(new Set())} style={{background:"transparent",border:"none",color:C.greenMuted,fontSize:8,fontFamily:"monospace",cursor:"pointer"}}>CLEAR</button>
@@ -725,6 +737,43 @@ const NotesModal=({container,onClose,onSave})=>{
 };
 
 const Notif=({msg})=>msg?<div style={{position:"fixed",top:44,right:12,background:C.bgSurface,border:`1px solid ${C.green}`,padding:"6px 12px",fontSize:9,color:C.green,fontFamily:"monospace",letterSpacing:1,zIndex:300}}>{msg}</div>:null;
+
+// ── MOVE TO DIALOG ────────────────────────────────────────────────────────
+// Reliable multi-move: pick a destination folder for the current selection.
+const MoveToModal=({containers,projectId,currentContainerId,count,onClose,onPick})=>{
+  const flat=[];
+  const walk=(parentId,depth)=>{
+    containers.filter(c=>c.project_id===projectId&&(c.parent_id||null)===(parentId||null))
+      .forEach(c=>{flat.push({c,depth});walk(c.id,depth+1);});
+  };
+  walk(null,0);
+  useEffect(()=>{
+    const onKey=(e)=>{if(e.key==="Escape"){e.preventDefault();onClose();}};
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[onClose]);
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.bgSurface,border:`1px solid ${C.borderMed}`,padding:16,width:300,maxHeight:"70vh",display:"flex",flexDirection:"column",fontFamily:"monospace"}}>
+        <div style={{fontSize:10,color:C.green,letterSpacing:2,marginBottom:10}}>{`// MOVE ${count} TO...`}</div>
+        <div style={{overflowY:"auto",flex:1}}>
+          {flat.length===0&&<div style={{fontSize:9,color:C.greenMuted}}>NO FOLDERS IN PROJECT</div>}
+          {flat.map(({c,depth})=>{
+            const isCur=c.id===currentContainerId;
+            return(
+              <button key={c.id} disabled={isCur} onClick={()=>onPick(c.id)}
+                style={{display:"block",width:"100%",textAlign:"left",background:"transparent",border:"none",color:isCur?C.greenMuted:C.greenDim,fontSize:9,fontFamily:"monospace",padding:`4px 4px 4px ${4+depth*14}px`,cursor:isCur?"default":"pointer",letterSpacing:0.5}}
+                onMouseEnter={e=>{if(!isCur)e.currentTarget.style.color=C.green;}}
+                onMouseLeave={e=>{if(!isCur)e.currentTarget.style.color=C.greenDim;}}
+              >▸ {c.name}{isCur?" (CURRENT)":""}</button>
+            );
+          })}
+        </div>
+        <button onClick={onClose} style={{marginTop:10,background:"transparent",border:`1px solid ${C.borderMed}`,color:C.greenMuted,fontSize:8,fontFamily:"monospace",padding:"4px 0",cursor:"pointer",letterSpacing:1}}>CANCEL</button>
+      </div>
+    </div>
+  );
+};
 
 // ── TRASH ORIGINALS DIALOG ────────────────────────────────────────────────
 // KEEP is the focused/safe default (Enter & Esc both keep). TRASH requires
@@ -1201,6 +1250,37 @@ export default function App() {
     else notify("STAGING FAILED");
   };
 
+  // ── Internal moves ──
+  const [moveToOpen,setMoveToOpen]=useState(false);
+  const refreshContainerAssets=async(ids)=>{
+    const uniq=[...new Set(ids.filter(Boolean))];
+    const results=await Promise.all(uniq.map(id=>api.getAssets(id)));
+    setAssetMap(m=>{const n={...m};uniq.forEach((id,i)=>{n[id]=results[i];});return n;});
+  };
+  // Batch move via picker — the reliable multi-move route
+  const handleMoveTo=async(targetId)=>{
+    setMoveToOpen(false);
+    const ids=[...multiSelected];
+    if(!ids.length||!targetId)return;
+    const res=await api.moveAssets({assetIds:ids,targetContainerId:targetId});
+    await refreshContainerAssets([activeContainerId,targetId]);
+    setMultiSelected(new Set());
+    notify(`${res.moved} MOVED`);
+  };
+  // Drop on a sidebar folder: known assets MOVE, unknown files IMPORT there
+  const handleDropToFolder=async(targetId,paths)=>{
+    if(!activeProjectId||!paths.length)return;
+    const res=await api.moveOrImport({filePaths:paths,targetContainerId:targetId,projectId:activeProjectId});
+    if(!res)return;
+    await refreshContainerAssets([activeContainerId,targetId]);
+    setMultiSelected(new Set());
+    const bits=[];
+    if(res.moved)bits.push(`${res.moved} MOVED`);
+    if(res.imported.length)bits.push(`${res.imported.length} IMPORTED`);
+    if(bits.length)notify(bits.join(" · "));
+    if(res.imported.length)offerTrash(res.imported);
+  };
+
   useEffect(()=>{
     const h=(e)=>{
       if (e.key==="F9") setNarrow(n=>!n);
@@ -1251,6 +1331,7 @@ export default function App() {
           setActiveContainerId={id=>{setActiveContainerId(id);setSelectedAssetId(null);setSearch("");setMultiSelected(new Set());}}
           containerAssetCounts={containerAssetCounts}
           onAddFolder={openAddFolder}
+          onDropToFolder={handleDropToFolder}
           onDeleteContainer={async({id,projectId})=>{
             const updated=await api.deleteContainer({id,projectId});
             setContainers(prev=>[...prev.filter(c=>c.project_id!==projectId),...updated]);
@@ -1290,7 +1371,7 @@ export default function App() {
                   assets={filteredAssets}
                   selectedId={selectedAssetId} onSelect={setSelectedAssetId}
                   multiSelected={multiSelected} setMultiSelected={setMultiSelected}
-                  onStage={handleStage}
+                  onStage={handleStage} onMoveTo={()=>setMoveToOpen(true)}
                   thumbSize={thumbSize} viewMode={viewMode}
                   onDropFiles={handleDroppedFiles} onStartDrag={handleStartDrag}
                   onStateChange={handleStateChange}
@@ -1315,6 +1396,7 @@ export default function App() {
       {modal==="new-folder"&&<NewFolderModal onClose={()=>setModal(null)} onCreate={handleCreateFolder} parentName={newFolderMeta.parentName}/>}
       {modal==="notes"&&<NotesModal container={activeContainer} onClose={()=>setModal(null)} onSave={handleSaveNotes}/>}
       {trashBatch&&<TrashOriginalsModal batch={trashBatch} onResolve={resolveTrash}/>}
+      {moveToOpen&&<MoveToModal containers={containers} projectId={activeProjectId} currentContainerId={activeContainerId} count={multiSelected.size} onClose={()=>setMoveToOpen(false)} onPick={handleMoveTo}/>}
       <Notif msg={notification}/>
       <ConnectorWidget snapState={snapState} onSnap={handleSnap} onUndock={handleUndock}/>
     </div>
