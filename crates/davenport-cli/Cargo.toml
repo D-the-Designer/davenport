@@ -1,0 +1,12 @@
+[package]
+name = "davenport-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "davenport"
+path = "src/main.rs"
+
+[dependencies]
+davenport-core = { path = "../davenport-core" }
+serde_json = "1"
